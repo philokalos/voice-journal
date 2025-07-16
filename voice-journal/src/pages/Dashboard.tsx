@@ -1,9 +1,11 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useAuth } from '../domains/auth/hooks/useAuth'
+import { VoiceRecorder } from '../domains/journaling/components/VoiceRecorder'
 import { EntryTest } from '../components/EntryTest'
 
 export const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth()
+  const [activeTab, setActiveTab] = useState<'recorder' | 'entries'>('recorder')
 
   const handleSignOut = async () => {
     try {
@@ -34,9 +36,38 @@ export const Dashboard: React.FC = () => {
         </div>
       </header>
       
+      {/* Tab Navigation */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('recorder')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'recorder'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Record
+            </button>
+            <button
+              onClick={() => setActiveTab('entries')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'entries'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Entries
+            </button>
+          </nav>
+        </div>
+      </div>
+      
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <EntryTest />
+          {activeTab === 'recorder' && <VoiceRecorder />}
+          {activeTab === 'entries' && <EntryTest />}
         </div>
       </main>
     </div>
