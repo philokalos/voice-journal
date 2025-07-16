@@ -1,5 +1,6 @@
 import React from 'react'
 import { useAuth } from '../domains/auth/hooks/useAuth'
+import { EntryTest } from '../components/EntryTest'
 
 export const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth()
@@ -35,27 +36,7 @@ export const Dashboard: React.FC = () => {
       
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <div className="border-4 border-dashed border-gray-200 rounded-lg h-96 p-8">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Welcome to Voice Journal
-              </h2>
-              <p className="text-gray-600 mb-8">
-                Your voice journaling dashboard will be here soon.
-              </p>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <h3 className="text-lg font-medium text-blue-900 mb-2">
-                  Coming Soon
-                </h3>
-                <ul className="text-sm text-blue-800 space-y-2">
-                  <li>• Voice recording functionality</li>
-                  <li>• AI-powered reflection analysis</li>
-                  <li>• Timeline and search dashboard</li>
-                  <li>• Google Sheets & Notion integration</li>
-                </ul>
-              </div>
-            </div>
-          </div>
+          <EntryTest />
         </div>
       </main>
     </div>
