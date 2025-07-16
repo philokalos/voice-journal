@@ -2,12 +2,14 @@ import React, { useState, useCallback } from 'react'
 import { RecorderButton } from './RecorderButton'
 import { useTranscription } from '../hooks/useTranscription'
 import { useCreateEntry } from '../hooks/useEntries'
+import { useAnalyzeEntry } from '../hooks/useAnalysis'
 import type { CreateEntryRequest } from '../../../shared/types/entry'
 
 export const VoiceRecorder: React.FC = () => {
-  const [step, setStep] = useState<'recording' | 'transcribing' | 'editing' | 'saving'>('recording')
+  const [step, setStep] = useState<'recording' | 'transcribing' | 'editing' | 'analyzing' | 'saving'>('recording')
   const [, setAudioBlob] = useState<Blob | null>(null)
   const [editableTranscript, setEditableTranscript] = useState('')
+  const [, setCurrentEntryId] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const {
@@ -20,6 +22,7 @@ export const VoiceRecorder: React.FC = () => {
   } = useTranscription()
 
   const createEntryMutation = useCreateEntry()
+  const analyzeEntryMutation = useAnalyzeEntry()
 
   const showNotification = useCallback((type: 'success' | 'error', message: string) => {
     setNotification({ type, message })
@@ -71,6 +74,7 @@ export const VoiceRecorder: React.FC = () => {
     setStep('saving')
 
     try {
+      // First, create the entry
       const entry: CreateEntryRequest = {
         date: new Date().toISOString().split('T')[0],
         transcript: editableTranscript.trim(),
@@ -81,14 +85,29 @@ export const VoiceRecorder: React.FC = () => {
         sentiment_score: 0,
       }
 
-      await createEntryMutation.mutateAsync(entry)
+      const createdEntry = await createEntryMutation.mutateAsync(entry)
+      setCurrentEntryId(createdEntry.id)
       
-      showNotification('success', 'Entry saved successfully!')
+      // Then analyze the entry
+      setStep('analyzing')
+      
+      try {
+        await analyzeEntryMutation.mutateAsync({
+          entryId: createdEntry.id,
+          transcript: editableTranscript.trim()
+        })
+        
+        showNotification('success', 'Entry saved and analyzed successfully!')
+      } catch (analysisError) {
+        console.error('Analysis failed:', analysisError)
+        showNotification('success', 'Entry saved! Analysis will be retried later.')
+      }
       
       // Reset for next recording
       setStep('recording')
       setAudioBlob(null)
       setEditableTranscript('')
+      setCurrentEntryId(null)
       resetTranscription()
       
     } catch (error) {
@@ -96,12 +115,13 @@ export const VoiceRecorder: React.FC = () => {
       showNotification('error', errorMessage)
       setStep('editing')
     }
-  }, [editableTranscript, createEntryMutation, showNotification, resetTranscription])
+  }, [editableTranscript, createEntryMutation, analyzeEntryMutation, showNotification, resetTranscription])
 
   const handleStartOver = useCallback(() => {
     setStep('recording')
     setAudioBlob(null)
     setEditableTranscript('')
+    setCurrentEntryId(null)
     resetTranscription()
   }, [resetTranscription])
 
@@ -198,6 +218,19 @@ export const VoiceRecorder: React.FC = () => {
         </div>
       )}
 
+      {/* Analyzing Step */}
+      {step === 'analyzing' && (
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Analyzing...</h2>
+          <p className="text-gray-600">AI is extracting insights from your entry</p>
+          <div className="mt-4 text-sm text-gray-500">
+            <p>✓ Entry saved</p>
+            <p>🤖 Extracting wins, regrets, tasks, and keywords...</p>
+          </div>
+        </div>
+      )}
+
       {/* Instructions */}
       {step === 'recording' && (
         <div className="mt-12 text-center">
@@ -207,7 +240,8 @@ export const VoiceRecorder: React.FC = () => {
             <p>2. Speak naturally about your day</p>
             <p>3. Tap the stop button when finished</p>
             <p>4. Review and edit the transcription</p>
-            <p>5. Save your entry to your journal</p>
+            <p>5. Save your entry - AI will analyze it automatically</p>
+            <p>6. Get insights on wins, regrets, tasks, and keywords</p>
           </div>
         </div>
       )}
