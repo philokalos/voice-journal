@@ -20,7 +20,43 @@ export class EntryService {
       throw new Error(`Failed to create entry: ${error.message}`)
     }
 
+    // Trigger Google Sheets sync in background
+    this.triggerSheetsSync(entry.id).catch(error => {
+      console.warn('Failed to trigger Google Sheets sync:', error)
+    })
+
     return entry
+  }
+
+  static async triggerSheetsSync(entryId: string): Promise<void> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        console.warn('No session available for Google Sheets sync')
+        return
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sheets-sync`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ entryId }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Sync failed')
+      }
+
+      console.log('Google Sheets sync triggered successfully')
+    } catch (error) {
+      console.error('Error triggering Google Sheets sync:', error)
+      throw error
+    }
   }
 
   static async getEntry(id: string): Promise<Entry | null> {

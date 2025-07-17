@@ -60,8 +60,10 @@ export const useUpdateEntry = () => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateEntryRequest }) => 
-      EntryService.updateEntry(id, data),
+    mutationFn: (entry: UpdateEntryRequest & { id: string }) => {
+      const { id, ...data } = entry
+      return EntryService.updateEntry(id, data)
+    },
     onSuccess: (updatedEntry) => {
       // Update the specific entry in cache
       queryClient.setQueryData(['entry', updatedEntry.id], updatedEntry)

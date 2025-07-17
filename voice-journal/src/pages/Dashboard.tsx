@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../domains/auth/hooks/useAuth'
 import { VoiceRecorder } from '../domains/journaling/components/VoiceRecorder'
-import { EntryTest } from '../components/EntryTest'
+import { JournalDashboard } from '../domains/journaling/components/JournalDashboard'
 
 export const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth()
-  const [activeTab, setActiveTab] = useState<'recorder' | 'entries'>('recorder')
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState<'recorder' | 'journal'>('recorder')
 
   const handleSignOut = async () => {
     try {
@@ -25,6 +27,12 @@ export const Dashboard: React.FC = () => {
               <span className="text-sm text-gray-700">
                 Welcome, {user?.email}
               </span>
+              <button
+                onClick={() => navigate('/settings')}
+                className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              >
+                Settings
+              </button>
               <button
                 onClick={handleSignOut}
                 className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
@@ -51,14 +59,14 @@ export const Dashboard: React.FC = () => {
               Record
             </button>
             <button
-              onClick={() => setActiveTab('entries')}
+              onClick={() => setActiveTab('journal')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'entries'
+                activeTab === 'journal'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Entries
+              Journal
             </button>
           </nav>
         </div>
@@ -67,7 +75,7 @@ export const Dashboard: React.FC = () => {
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           {activeTab === 'recorder' && <VoiceRecorder />}
-          {activeTab === 'entries' && <EntryTest />}
+          {activeTab === 'journal' && <JournalDashboard />}
         </div>
       </main>
     </div>
