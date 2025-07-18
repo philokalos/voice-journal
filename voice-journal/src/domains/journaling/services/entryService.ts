@@ -1,224 +1,215 @@
 import { supabase } from '../../../lib/supabase'
-import type { 
-  Entry, 
-  CreateEntryRequest, 
-  UpdateEntryRequest, 
-  EntryFilters, 
-  EntriesQueryResult,
-  AudioUploadResult 
-} from '../../../shared/types/entry'
+// MVP: Disabled offline features
+// import { OfflineStorageService } from '../../../lib/offlineDB'
+import type { Entry } from '../../../shared/types/entry'
+
+export interface CreateEntryRequest {
+  content: string
+  date: string
+  sentiment?: string
+  keywords?: string[]
+  wins?: string[]
+  regrets?: string[]
+  todos?: string[]
+  // MVP: Simplified without audio features for now
+  // id?: string
+  // user_id?: string
+  // has_audio?: boolean
+  // audio_url?: string
+  // audio_path?: string
+  // audio_size?: number
+}
+
+export interface UpdateEntryRequest {
+  id: string
+  content?: string
+  sentiment?: string
+  keywords?: string[]
+  wins?: string[]
+  regrets?: string[]
+  todos?: string[]
+}
 
 export class EntryService {
-  static async createEntry(data: CreateEntryRequest): Promise<Entry> {
-    const { data: entry, error } = await supabase
-      .from('entries')
-      .insert([data])
-      .select()
-      .single()
-
-    if (error) {
-      throw new Error(`Failed to create entry: ${error.message}`)
-    }
-
-    // Trigger Google Sheets sync in background
-    this.triggerSheetsSync(entry.id).catch(error => {
-      console.warn('Failed to trigger Google Sheets sync:', error)
-    })
-
-    return entry
-  }
-
-  static async triggerSheetsSync(entryId: string): Promise<void> {
+  // Create a new entry
+  static async createEntry(request: CreateEntryRequest): Promise<Entry> {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session) {
-        console.warn('No session available for Google Sheets sync')
-        return
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        throw new Error('User not authenticated')
       }
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sheets-sync`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ entryId }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Sync failed')
+      // MVP: Create entry with basic fields only
+      const entryData = {
+        user_id: user.id,
+        content: request.content,
+        date: request.date,
+        sentiment: request.sentiment || null,
+        keywords: request.keywords || [],
+        wins: request.wins || [],
+        regrets: request.regrets || [],
+        todos: request.todos || []
       }
 
-      console.log('Google Sheets sync triggered successfully')
+      const { data, error } = await supabase
+        .from('entries')
+        .insert(entryData)
+        .select()
+        .single()
+
+      if (error) {
+        throw error
+      }
+
+      return data as Entry
     } catch (error) {
-      console.error('Error triggering Google Sheets sync:', error)
+      console.error('Failed to create entry:', error)
+      
+      // MVP: No offline storage for now, just throw error
+      // try {
+      //   // Store offline if online operation fails
+      //   const offlineEntry = await OfflineStorageService.storeEntry({
+      //     id: request.id || crypto.randomUUID(),
+      //     user_id: request.user_id || 'offline',
+      //     ...request,
+      //     // MVP: No audio support in offline mode
+      //   })
+      //   return offlineEntry as Entry
+      // } catch (offlineError) {
+      //   console.error('Failed to store entry offline:', offlineError)
+      //   throw error
+      // }
+      
       throw error
     }
   }
 
-  static async getEntry(id: string): Promise<Entry | null> {
-    const { data: entry, error } = await supabase
-      .from('entries')
-      .select('*')
-      .eq('id', id)
-      .single()
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return null // Entry not found
+  // Get all entries for the current user
+  static async getEntries(): Promise<Entry[]> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        throw new Error('User not authenticated')
       }
-      throw new Error(`Failed to get entry: ${error.message}`)
-    }
 
-    return entry
+      const { data, error } = await supabase
+        .from('entries')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+
+      if (error) {
+        throw error
+      }
+
+      return data as Entry[]
+    } catch (error) {
+      console.error('Failed to fetch entries:', error)
+      throw error
+    }
   }
 
-  static async updateEntry(id: string, data: UpdateEntryRequest): Promise<Entry> {
-    const { data: entry, error } = await supabase
-      .from('entries')
-      .update(data)
-      .eq('id', id)
-      .select()
-      .single()
+  // Get a single entry by ID
+  static async getEntry(id: string): Promise<Entry> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
 
-    if (error) {
-      throw new Error(`Failed to update entry: ${error.message}`)
+      const { data, error } = await supabase
+        .from('entries')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .single()
+
+      if (error) {
+        throw error
+      }
+
+      return data as Entry
+    } catch (error) {
+      console.error('Failed to fetch entry:', error)
+      throw error
     }
-
-    return entry
   }
 
+  // Update an existing entry
+  static async updateEntry(request: UpdateEntryRequest): Promise<Entry> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
+
+      const { id, ...updateData } = request
+
+      const { data, error } = await supabase
+        .from('entries')
+        .update(updateData)
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+
+      if (error) {
+        throw error
+      }
+
+      return data as Entry
+    } catch (error) {
+      console.error('Failed to update entry:', error)
+      throw error
+    }
+  }
+
+  // Delete an entry
   static async deleteEntry(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('entries')
-      .delete()
-      .eq('id', id)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
 
-    if (error) {
-      throw new Error(`Failed to delete entry: ${error.message}`)
+      const { error } = await supabase
+        .from('entries')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id)
+
+      if (error) {
+        throw error
+      }
+    } catch (error) {
+      console.error('Failed to delete entry:', error)
+      throw error
     }
   }
 
-  static async getEntries(
-    filters: EntryFilters = {},
-    page: number = 1,
-    pageSize: number = 20
-  ): Promise<EntriesQueryResult> {
-    let query = supabase
-      .from('entries')
-      .select('*', { count: 'exact' })
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false })
+  // Search entries by content
+  static async searchEntries(query: string): Promise<Entry[]> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
 
-    // Apply filters
-    if (filters.start_date) {
-      query = query.gte('date', filters.start_date)
+      const { data, error } = await supabase
+        .from('entries')
+        .select('*')
+        .eq('user_id', user.id)
+        .textSearch('content', query)
+        .order('date', { ascending: false })
+
+      if (error) {
+        throw error
+      }
+
+      return data as Entry[]
+    } catch (error) {
+      console.error('Failed to search entries:', error)
+      throw error
     }
-    if (filters.end_date) {
-      query = query.lte('date', filters.end_date)
-    }
-    if (filters.keywords && filters.keywords.length > 0) {
-      query = query.overlaps('keywords', filters.keywords)
-    }
-    if (filters.sentiment_min !== undefined) {
-      query = query.gte('sentiment_score', filters.sentiment_min)
-    }
-    if (filters.sentiment_max !== undefined) {
-      query = query.lte('sentiment_score', filters.sentiment_max)
-    }
-    if (filters.search_text) {
-      query = query.textSearch('transcript', filters.search_text)
-    }
-
-    // Apply pagination
-    const from = (page - 1) * pageSize
-    const to = from + pageSize - 1
-    query = query.range(from, to)
-
-    const { data: entries, error, count } = await query
-
-    if (error) {
-      throw new Error(`Failed to get entries: ${error.message}`)
-    }
-
-    return {
-      entries: entries || [],
-      total_count: count || 0,
-      page,
-      page_size: pageSize
-    }
-  }
-
-  static async getEntriesByDate(date: string): Promise<Entry[]> {
-    const { data: entries, error } = await supabase
-      .from('entries')
-      .select('*')
-      .eq('date', date)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      throw new Error(`Failed to get entries by date: ${error.message}`)
-    }
-
-    return entries || []
-  }
-
-  static async uploadAudio(file: File, entryId?: string): Promise<AudioUploadResult> {
-    const userId = (await supabase.auth.getUser()).data.user?.id
-    if (!userId) {
-      throw new Error('User not authenticated')
-    }
-
-    const fileName = entryId 
-      ? `${entryId}.${file.name.split('.').pop()}`
-      : `${Date.now()}.${file.name.split('.').pop()}`
-    
-    const filePath = `${userId}/${fileName}`
-
-    const { data, error } = await supabase.storage
-      .from('audio-recordings')
-      .upload(filePath, file, {
-        upsert: true,
-        contentType: file.type
-      })
-
-    if (error) {
-      throw new Error(`Failed to upload audio: ${error.message}`)
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('audio-recordings')
-      .getPublicUrl(filePath)
-
-    return {
-      file_path: data.path,
-      file_url: publicUrl,
-      file_size: file.size
-    }
-  }
-
-  static async deleteAudio(filePath: string): Promise<void> {
-    const { error } = await supabase.storage
-      .from('audio-recordings')
-      .remove([filePath])
-
-    if (error) {
-      throw new Error(`Failed to delete audio: ${error.message}`)
-    }
-  }
-
-  static async getAudioUrl(filePath: string): Promise<string> {
-    const { data } = await supabase.storage
-      .from('audio-recordings')
-      .createSignedUrl(filePath, 3600) // 1 hour expiry
-
-    if (!data?.signedUrl) {
-      throw new Error('Failed to generate audio URL')
-    }
-
-    return data.signedUrl
   }
 }

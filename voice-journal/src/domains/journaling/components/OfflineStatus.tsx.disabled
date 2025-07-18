@@ -1,0 +1,234 @@
+import React from 'react'
+import { useOfflineSync } from '../hooks/useOfflineSync'
+
+interface OfflineStatusProps {
+  className?: string
+  showDetails?: boolean
+}
+
+export const OfflineStatus: React.FC<OfflineStatusProps> = ({ 
+  className = '', 
+  showDetails = false 
+}) => {
+  const {
+    isOnline,
+    isSyncing,
+    pendingItems,
+    lastSyncAttempt,
+    syncProgress,
+    hasPendingItems,
+    forceSync
+  } = useOfflineSync({
+    onSync: (result) => {
+      if (result.success) {
+        console.log(`Sync completed: ${result.syncedItems} items synced`)
+      } else {
+        console.error('Sync failed:', result.errors)
+      }
+    },
+    onError: (error) => {
+      console.error('Offline sync error:', error)
+    }
+  })
+
+  const handleForceSync = async () => {
+    if (!isOnline || isSyncing) {
+      return
+    }
+
+    try {
+      await forceSync()
+    } catch (error) {
+      console.error('Manual sync failed:', error)
+    }
+  }
+
+  const getStatusColor = () => {
+    if (!isOnline) return 'text-red-500'
+    if (isSyncing) return 'text-yellow-500'
+    if (hasPendingItems) return 'text-blue-500'
+    return 'text-green-500'
+  }
+
+  const getStatusIcon = () => {
+    if (!isOnline) return '📶'
+    if (isSyncing) return '🔄'
+    if (hasPendingItems) return '📤'
+    return '✅'
+  }
+
+  const getStatusText = () => {
+    if (!isOnline) return 'Offline'
+    if (isSyncing) return 'Syncing...'
+    if (hasPendingItems) return `${pendingItems} pending`
+    return 'Synced'
+  }
+
+  return (
+    <div className={`flex items-center space-x-2 ${className}`}>
+      {/* Status Indicator */}
+      <div className="flex items-center space-x-1">
+        <span className="text-sm">{getStatusIcon()}</span>
+        <span className={`text-xs font-medium ${getStatusColor()}`}>
+          {getStatusText()}
+        </span>
+      </div>
+
+      {/* Sync Progress */}
+      {isSyncing && syncProgress && (
+        <div className="flex items-center space-x-2">
+          <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-blue-500 transition-all duration-300"
+              style={{ 
+                width: `${(syncProgress.current / syncProgress.total) * 100}%` 
+              }}
+            />
+          </div>
+          <span className="text-xs text-gray-600">
+            {syncProgress.current}/{syncProgress.total}
+          </span>
+        </div>
+      )}
+
+      {/* Sync Button */}
+      {isOnline && hasPendingItems && !isSyncing && (
+        <button
+          onClick={handleForceSync}
+          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+          title="Force sync now"
+        >
+          Sync
+        </button>
+      )}
+
+      {/* Detailed Status */}
+      {showDetails && (
+        <div className="text-xs text-gray-500">
+          {lastSyncAttempt && (
+            <span>
+              Last sync: {lastSyncAttempt.toLocaleTimeString()}
+            </span>
+          )}
+          {isSyncing && syncProgress && (
+            <div className="mt-1">
+              <span className="text-gray-600">
+                {syncProgress.currentItem}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface OfflineIndicatorProps {
+  className?: string
+}
+
+export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({ className = '' }) => {
+  const { isOnline, isSyncing, hasPendingItems } = useOfflineSync()
+
+  if (isOnline && !isSyncing && !hasPendingItems) {
+    return null
+  }
+
+  return (
+    <div className={`fixed top-4 right-4 z-50 ${className}`}>
+      <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-3">
+        <OfflineStatus showDetails={true} />
+      </div>
+    </div>
+  )
+}
+
+interface SyncControlsProps {
+  className?: string
+}
+
+export const SyncControls: React.FC<SyncControlsProps> = ({ className = '' }) => {
+  const {
+    isOnline,
+    isSyncing,
+    pendingItems,
+    hasPendingItems,
+    forceSync,
+    clearOfflineData
+  } = useOfflineSync()
+
+  const handleForceSync = async () => {
+    try {
+      await forceSync()
+    } catch (error) {
+      console.error('Manual sync failed:', error)
+    }
+  }
+
+  const handleClearOfflineData = async () => {
+    if (confirm('Are you sure you want to clear all offline data? This will remove any pending entries that haven\'t been synced.')) {
+      try {
+        await clearOfflineData()
+      } catch (error) {
+        console.error('Failed to clear offline data:', error)
+      }
+    }
+  }
+
+  return (
+    <div className={`space-y-4 ${className}`}>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <h3 className="font-medium text-gray-900 mb-3">Offline Sync Status</h3>
+        
+        <OfflineStatus showDetails={true} />
+        
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600">Connection Status:</span>
+            <span className={`text-sm font-medium ${isOnline ? 'text-green-600' : 'text-red-600'}`}>
+              {isOnline ? 'Online' : 'Offline'}
+            </span>
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600">Pending Items:</span>
+            <span className="text-sm font-medium text-gray-900">
+              {pendingItems}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <h3 className="font-medium text-gray-900 mb-3">Sync Actions</h3>
+        
+        <div className="space-y-2">
+          <button
+            onClick={handleForceSync}
+            disabled={!isOnline || isSyncing || !hasPendingItems}
+            className="w-full px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isSyncing ? 'Syncing...' : 'Force Sync Now'}
+          </button>
+          
+          <button
+            onClick={handleClearOfflineData}
+            disabled={isSyncing}
+            className="w-full px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Clear Offline Data
+          </button>
+        </div>
+        
+        <div className="mt-3 text-xs text-gray-500">
+          <p>
+            • Sync automatically happens when you go back online
+          </p>
+          <p>
+            • Clear offline data only if you're experiencing issues
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}

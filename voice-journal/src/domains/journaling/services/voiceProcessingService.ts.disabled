@@ -1,0 +1,158 @@
+import { supabase } from '../../../lib/supabase';
+import { OfflineStorageService } from '../../../lib/offlineDB';
+import { StorageService } from './storageService';
+
+export interface VoiceProcessingRequest {
+  entryId: string;
+  audioUrl: string;
+  userId: string;
+}
+
+export interface VoiceProcessingResponse {
+  success: boolean;
+  transcription?: string;
+  analysis?: {
+    wins: string[];
+    regrets: string[];
+    tasks: string[];
+    keywords: string[];
+    sentiment_score: number;
+  };
+  error?: string;
+}
+
+export class VoiceProcessingService {
+  static async processVoiceEntry(request: VoiceProcessingRequest): Promise<VoiceProcessingResponse> {
+    try {
+      const { data, error } = await supabase.functions.invoke('voice-processing', {
+        body: request
+      });
+
+      if (error) {
+        console.error('Voice processing function error:', error);
+        throw new Error(error.message || '음성 처리 중 오류가 발생했습니다.');
+      }
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      return {
+        success: true,
+        transcription: data.transcription,
+        analysis: data.analysis
+      };
+    } catch (error) {
+      console.error('Voice processing service error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '음성 처리 중 오류가 발생했습니다.'
+      };
+    }
+  }
+
+  /**
+   * Process voice entry with offline support
+   */
+  static async processVoiceEntryOffline(
+    audioBlob: Blob,
+    entryId: string,
+    userId: string
+  ): Promise<VoiceProcessingResponse> {
+    try {
+      // Check if online
+      if (!navigator.onLine) {
+        // Store encrypted audio offline
+        await OfflineStorageService.storeAudioOffline(audioBlob, entryId, userId);
+        
+        // Return placeholder response for offline processing
+        return {
+          success: true,
+          transcription: '[Offline - Will be processed when online]',
+          analysis: {
+            wins: [],
+            regrets: [],
+            tasks: [],
+            keywords: ['offline'],
+            sentiment_score: 0.5
+          }
+        };
+      }
+
+      // Online processing
+      try {
+        // Upload audio to cloud storage
+        const uploadResult = await StorageService.uploadVoiceFile(audioBlob, userId, entryId);
+        
+        // Process with cloud function
+        const request: VoiceProcessingRequest = {
+          entryId,
+          audioUrl: uploadResult.url,
+          userId
+        };
+        
+        const result = await this.processVoiceEntry(request);
+        
+        if (result.success) {
+          return result;
+        }
+        
+        // If cloud processing fails, store offline as fallback
+        await OfflineStorageService.storeAudioOffline(audioBlob, entryId, userId);
+        throw new Error(result.error || 'Processing failed');
+        
+      } catch (error) {
+        // Store offline as fallback
+        await OfflineStorageService.storeAudioOffline(audioBlob, entryId, userId);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Voice processing with offline support failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '음성 처리 중 오류가 발생했습니다.'
+      };
+    }
+  }
+
+  static async processVoiceEntryWithRetry(
+    request: VoiceProcessingRequest,
+    maxRetries: number = 3,
+    retryDelay: number = 1000
+  ): Promise<VoiceProcessingResponse> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Voice processing attempt ${attempt}/${maxRetries}`);
+        const result = await this.processVoiceEntry(request);
+        
+        if (result.success) {
+          return result;
+        }
+
+        lastError = new Error(result.error || 'Processing failed');
+        
+        // Don't retry on the last attempt
+        if (attempt < maxRetries) {
+          console.log(`Retrying in ${retryDelay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          retryDelay *= 2; // Exponential backoff
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+        
+        if (attempt < maxRetries) {
+          console.log(`Retrying in ${retryDelay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          retryDelay *= 2;
+        }
+      }
+    }
+
+    return {
+      success: false,
+      error: lastError?.message || '음성 처리에 실패했습니다.'
+    };
+  }
+}
