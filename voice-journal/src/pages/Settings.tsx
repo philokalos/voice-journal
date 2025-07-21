@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../domains/auth/hooks/useAuth'
+import { DataPrivacyService } from '../domains/auth/services/dataPrivacyService'
 // MVP: Disabled advanced integrations
 // import { GoogleSheetsSettings } from '../domains/integrations/components/GoogleSheetsSettings'
 // import { NotionSettings } from '../domains/integrations/components/NotionSettings'
@@ -8,6 +9,7 @@ import { useAuth } from '../domains/auth/hooks/useAuth'
 export const Settings: React.FC = () => {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
+  const [isDeletingData, setIsDeletingData] = useState(false)
 
   const handleSignOut = async () => {
     try {
@@ -15,6 +17,24 @@ export const Settings: React.FC = () => {
       navigate('/')
     } catch (error) {
       console.error('Sign out error:', error)
+    }
+  }
+
+  const handleDeleteAllData = async () => {
+    try {
+      setIsDeletingData(true)
+      
+      const result = await DataPrivacyService.handleDataDeletionRequest()
+      
+      if (result) {
+        // Data was successfully deleted, user will be signed out automatically
+        // since their account was deleted
+        navigate('/')
+      }
+    } catch (error) {
+      console.error('Data deletion error:', error)
+    } finally {
+      setIsDeletingData(false)
     }
   }
 
@@ -111,10 +131,34 @@ export const Settings: React.FC = () => {
             </div>
           </div>
 
+          {/* Privacy & Data Section */}
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">Privacy & Data</h2>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <h3 className="text-sm font-medium text-gray-900 mb-2">Data Rights (GDPR/CCPA)</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  You have the right to request deletion of all your personal data. This includes all journal entries, 
+                  voice recordings, and account information. This action cannot be undone.
+                </p>
+                <button
+                  onClick={handleDeleteAllData}
+                  disabled={isDeletingData}
+                  data-delete-account
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isDeletingData ? 'Deleting data...' : 'Delete All My Data'}
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Danger Zone */}
           <div className="bg-white shadow rounded-lg">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-red-900">Danger Zone</h2>
+              <h2 className="text-lg font-medium text-red-900">Account Actions</h2>
             </div>
             <div className="px-6 py-4">
               <button
