@@ -1,0 +1,12 @@
+{
+  "name": "voice-journal-root",
+  "version": "1.0.0",
+  "scripts": {
+    "install": "cd voice-journal && npm install",
+    "build": "cd voice-journal && npm run build",
+    "dev": "cd voice-journal && npm run dev"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
