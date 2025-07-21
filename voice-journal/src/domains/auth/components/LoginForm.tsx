@@ -24,14 +24,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
 
     try {
       const result = isSignUp 
-        ? await signUp({ email, password })
-        : await signIn({ email, password })
+        ? await signUp(email, password)
+        : await signIn(email, password)
 
-      if (result.error) {
-        setError(result.error.message)
-      } else {
-        onSuccess?.()
-      }
+      onSuccess?.()
     } catch (err) {
       setError('Something went wrong. Please try again.')
     }

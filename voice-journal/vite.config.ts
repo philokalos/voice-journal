@@ -32,4 +32,27 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Separate Firebase into its own chunk
+          firebase: [
+            'firebase/app',
+            'firebase/auth',
+            'firebase/firestore',
+            'firebase/storage'
+          ],
+          // Separate React libraries
+          react: ['react', 'react-dom'],
+          // Separate routing
+          router: ['react-router-dom'],
+          // Separate data fetching
+          query: ['@tanstack/react-query']
+        }
+      }
+    },
+    // Increase chunk size warning limit since we're chunking appropriately
+    chunkSizeWarningLimit: 600
+  }
 })

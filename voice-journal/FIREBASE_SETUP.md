@@ -1,107 +1,278 @@
-# Firebase Storage 설정 가이드
+# Firebase Setup Guide
 
-## 📋 개요
-음성 파일을 클라우드에 저장하기 위해 Firebase Storage를 사용합니다.
+Firebase provides optional advanced features for Voice Journal. This guide shows how to set up Firebase alongside the primary Supabase backend.
 
-## 🚀 Firebase 프로젝트 생성
+## 🎯 Overview
 
-### 1. Firebase 콘솔 접속
-1. https://console.firebase.google.com 접속
-2. Google 계정으로 로그인
-3. "프로젝트 추가" 클릭
+Voice Journal uses **Supabase as the primary backend** for all core features:
+- ✅ Authentication (Email, Google, Apple)  
+- ✅ Database (PostgreSQL with RLS)
+- ✅ File Storage (Private audio files)
+- ✅ Realtime updates
 
-### 2. 프로젝트 설정
-1. **프로젝트 이름**: `voice-journal` (또는 원하는 이름)
-2. **Google Analytics**: 선택사항 (권장: 사용 안함)
-3. 프로젝트 생성 완료
+**Firebase is optional** and provides supplementary features:
+- 🔄 Additional storage for large files
+- 🔄 Advanced analytics and performance monitoring  
+- ⏳ Cloud Functions for heavy processing
+- ⏳ Push notifications (future)
 
-### 3. Storage 설정
-1. Firebase 콘솔에서 "Storage" 메뉴 클릭
-2. "시작하기" 클릭
-3. **보안 규칙 설정**:
-   ```javascript
-   rules_version = '2';
-   service firebase.storage {
-     match /b/{bucket}/o {
-       match /voices/{userId}/{entryId}/{allPaths=**} {
-         allow read, write: if request.auth != null && request.auth.uid == userId;
-       }
-     }
-   }
-   ```
-4. **Storage 위치**: 가까운 지역 선택 (예: asia-northeast3)
+## 🚀 Firebase Setup
 
-### 4. 웹 앱 설정
-1. 프로젝트 설정 → "일반" 탭
-2. "앱 추가" → 웹 앱 선택
-3. **앱 닉네임**: `voice-journal-web`
-4. Firebase Hosting 설정 체크 해제
-5. 앱 등록
+### Step 1: Create Firebase Project
 
-### 5. 구성 정보 복사
-앱 등록 후 표시되는 구성 정보를 복사:
+1. Go to [Firebase Console](https://console.firebase.google.com)
+2. Click "Create a project"
+3. Project details:
+   - **Name**: `voice-journal-prod`
+   - **Analytics**: Enable for user insights
+   - **Region**: Match your Supabase region
+
+### Step 2: Configure Services
+
+#### Storage (Primary Use Case)
+```
+1. Storage → Get started
+2. Security rules: Start in test mode  
+3. Location: Choose your region
+4. Create bucket: voice-journal-storage
+```
+
+#### Analytics
+```
+1. Analytics → Get started
+2. Google Analytics account: Create or select
+3. Data sharing: Configure per your privacy policy
+```
+
+#### Cloud Functions (Future)
+```
+1. Functions → Get started
+2. Billing: Upgrade to Blaze plan
+3. Location: Choose your region
+```
+
+### Step 3: Get Configuration
+
+1. **Project Settings** (gear icon) → **General**
+2. **Your apps** → **Web app**
+3. Copy the configuration object:
+
 ```javascript
 const firebaseConfig = {
-  apiKey: "your-api-key",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
+  apiKey: "AIzaSyBOyYyRGj...",
+  authDomain: "voice-journal.firebaseapp.com",
+  projectId: "voice-journal",
+  storageBucket: "voice-journal.appspot.com",
   messagingSenderId: "123456789",
   appId: "1:123456789:web:abcdef123456"
 };
 ```
 
-## 🔧 환경 변수 설정
+## 🔧 Environment Setup
 
-### 로컬 개발용 (.env.local)
-```bash
-VITE_FIREBASE_API_KEY=your-api-key
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project-id
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+### Development (.env.local)
+
+```env
+# Firebase Configuration (Optional)
+VITE_FIREBASE_API_KEY=AIzaSyBOyYyRGj...
+VITE_FIREBASE_AUTH_DOMAIN=voice-journal.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=voice-journal
+VITE_FIREBASE_STORAGE_BUCKET=voice-journal.appspot.com
 VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
 VITE_FIREBASE_APP_ID=1:123456789:web:abcdef123456
 ```
 
-### Vercel 배포용
-Vercel 대시보드 → Settings → Environment Variables에 위 값들을 추가
+### Production (Vercel)
 
-## 🔐 보안 설정
+Add the same variables to Vercel:
+1. Project Settings → Environment Variables
+2. Add each `VITE_FIREBASE_*` variable
+3. Redeploy to apply changes
 
-### Storage 보안 규칙
-- 인증된 사용자만 자신의 파일에 접근 가능
-- 파일 경로: `/voices/{userId}/{entryId}/{timestamp}.webm`
-- 최대 파일 크기: 10MB (필요시 조정 가능)
+## 🛡️ Security Rules
 
-### CORS 설정
-Firebase Storage는 자동으로 CORS를 처리하므로 별도 설정 불필요
+### Storage Rules
 
-## 📊 사용량 모니터링
+```javascript
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // User-specific audio files and exports
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && 
+                          request.auth.uid == userId;
+    }
+    
+    // Public assets (app icons, etc.)
+    match /public/{allPaths=**} {
+      allow read: if true;
+    }
+  }
+}
+```
 
-### Storage 사용량 확인
-1. Firebase 콘솔 → Storage
-2. "사용량" 탭에서 저장소 사용량 확인
-3. "할당량" 탭에서 한도 설정 가능
+## 📱 Usage Examples
 
-### 무료 할당량
-- **저장소**: 5GB
-- **다운로드**: 1GB/일
-- **업로드**: 20,000회/일
+### Check Firebase Availability
 
-## 🛠️ 트러블슈팅
+```typescript
+import { isFirebaseAvailable } from './lib/firebase';
 
-### 업로드 실패 시
-1. Firebase 구성 정보 확인
-2. Storage 보안 규칙 확인
-3. 사용자 인증 상태 확인
-4. 네트워크 연결 상태 확인
+if (isFirebaseAvailable()) {
+  console.log('🔥 Firebase ready for advanced features');
+} else {
+  console.log('📝 Running with Supabase only (recommended for MVP)');
+}
+```
 
-### 파일 재생 실패 시
-1. CORS 설정 확인
-2. 파일 URL 유효성 확인
-3. 브라우저 개발자 도구에서 에러 확인
+### File Upload with Fallback
 
-## 📝 참고사항
-- 음성 파일 형식: WebM (브라우저 호환성 최적)
-- 파일명 규칙: `{timestamp}.webm`
-- 자동 삭제: 현재 미구현 (향후 추가 예정)
+```typescript
+import { getFirebaseStorage, isFirebaseAvailable } from './lib/firebase';
+import { supabase } from './lib/supabase';
+
+async function uploadLargeFile(file: File, userId: string) {
+  try {
+    if (isFirebaseAvailable() && file.size > 10 * 1024 * 1024) {
+      // Use Firebase for files > 10MB
+      const storage = getFirebaseStorage();
+      const ref = storageRef(storage, `users/${userId}/large/${file.name}`);
+      const snapshot = await uploadBytes(ref, file);
+      return getDownloadURL(snapshot.ref);
+    } else {
+      // Use Supabase for normal files
+      const { data, error } = await supabase.storage
+        .from('audio-files')
+        .upload(`${userId}/${file.name}`, file);
+      
+      if (error) throw error;
+      return data.path;
+    }
+  } catch (error) {
+    console.error('Upload failed:', error);
+    throw error;
+  }
+}
+```
+
+### Analytics Tracking
+
+```typescript
+import { getAnalytics, logEvent } from 'firebase/analytics';
+import { firebaseApp } from './lib/firebase';
+
+// Track custom events
+if (firebaseApp) {
+  const analytics = getAnalytics(firebaseApp);
+  
+  logEvent(analytics, 'journal_entry_created', {
+    method: 'voice',
+    has_audio: true,
+    processing_time: 1200
+  });
+}
+```
+
+## 🏗️ Architecture Overview
+
+```
+┌─ Voice Journal Architecture ─┐
+│                              │
+│  Frontend (React + Vite)     │
+│         │                    │
+│         ├─ Primary: Supabase │
+│         │  ├─ Auth ✅        │
+│         │  ├─ Database ✅    │  
+│         │  ├─ Storage ✅     │
+│         │  └─ Realtime ✅    │
+│         │                    │
+│         └─ Optional: Firebase│
+│            ├─ Storage 🔄     │
+│            ├─ Analytics 🔄   │
+│            └─ Functions ⏳   │
+│                              │
+└──────────────────────────────┘
+```
+
+## 🧪 Testing
+
+### Local Testing
+
+```bash
+# Test with Firebase
+VITE_FIREBASE_API_KEY=your-key npm run dev
+
+# Test without Firebase (default)
+npm run dev
+```
+
+### Verify Setup
+
+1. **Check Console**: Look for Firebase initialization logs
+2. **Test Upload**: Try uploading a large file  
+3. **Check Analytics**: Visit Firebase Console → Analytics
+4. **Monitor Errors**: Watch for configuration issues
+
+## 🚨 Common Issues
+
+### Firebase Not Loading
+```
+❌ Error: Firebase not configured
+✅ Solution: Add VITE_FIREBASE_* environment variables
+```
+
+### Storage Upload Fails
+```
+❌ Error: Storage upload permission denied
+✅ Solution: Check security rules and authentication
+```
+
+### Analytics Not Tracking
+```
+❌ Error: Events not appearing
+✅ Solution: Verify Analytics is enabled and app_id is correct
+```
+
+## 💰 Cost Optimization
+
+### Firebase Pricing Tiers
+
+**Spark Plan (Free)**
+- Storage: 1GB
+- Analytics: Unlimited
+- Functions: 125K invocations/month
+
+**Blaze Plan (Pay-as-you-go)**
+- Storage: $0.026/GB/month
+- Functions: $0.40/million invocations
+- Analytics: Free
+
+### Recommendations
+
+1. **Start with Spark Plan** for development
+2. **Monitor usage** in Firebase Console
+3. **Set billing alerts** before production
+4. **Use Supabase as primary** to minimize Firebase costs
+
+## 📊 Monitoring
+
+### Firebase Console
+- **Storage**: Upload/download metrics
+- **Analytics**: User behavior insights  
+- **Performance**: App loading times
+
+### Integration Monitoring
+- **Supabase**: Primary metrics and logs
+- **Firebase**: Supplementary analytics
+- **Vercel**: Deployment and performance
+
+---
+
+## 🎯 Next Steps
+
+1. **MVP Deployment**: Use Supabase only
+2. **Add Analytics**: Configure Firebase Analytics
+3. **Large File Support**: Implement Firebase Storage
+4. **Advanced Features**: Add Cloud Functions as needed
+
+Firebase enhances Voice Journal's capabilities while keeping Supabase as the reliable foundation.

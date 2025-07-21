@@ -1,0 +1,59 @@
+# Vercel deployment ignore file
+
+# Development files
+.env.local
+.env.development
+.env.test
+
+# Node modules
+node_modules/
+
+# Build outputs (will be built by Vercel)
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+.tmp/
+.cache/
+
+# Documentation (not needed in production)
+docs/
+*.md
+!README.md
+
+# Test files
+tests/
+test/
+**/*.test.*
+**/*.spec.*
+
+# Configuration files that shouldn't be deployed
+.eslintrc.*
+.prettierrc.*
+tsconfig.json
+tsconfig.*.json
+postcss.config.js
+tailwind.config.js
+
+# Supabase local development
+supabase/.temp/
+supabase/volumes/
+
+# Development scripts
+scripts/

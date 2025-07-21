@@ -1,92 +1,137 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { authService } from '../services/supabaseClient'
-import { supabase } from '../../../lib/supabase'
-import { useEffect } from 'react'
+import { useState, useEffect } from 'react'
+import { 
+  User, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  signInWithPopup,
+  GoogleAuthProvider,
+  onAuthStateChanged
+} from 'firebase/auth'
+import { getFirebaseAuth } from '../../../lib/firebase'
+
+export interface AuthUser {
+  uid: string
+  email: string | null
+  displayName: string | null
+  photoURL: string | null
+}
 
 export const useAuth = () => {
-  const queryClient = useQueryClient()
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSigningIn, setIsSigningIn] = useState(false)
+  const [isSigningUp, setIsSigningUp] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
 
-  const { data: user, isLoading } = useQuery({
-    queryKey: ['auth', 'user'],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      return user
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  })
+  const auth = getFirebaseAuth()
 
-  const { data: session } = useQuery({
-    queryKey: ['auth', 'session'],
-    queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      return session
-    },
-    staleTime: 5 * 60 * 1000,
-  })
+  // Convert Firebase User to AuthUser
+  const convertUser = (firebaseUser: User | null): AuthUser | null => {
+    if (!firebaseUser) return null
+    
+    return {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email,
+      displayName: firebaseUser.displayName,
+      photoURL: firebaseUser.photoURL
+    }
+  }
 
-  const signInMutation = useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) => 
-      authService.signIn(email, password),
-    onSuccess: (data) => {
-      if (data.user) {
-        queryClient.setQueryData(['auth', 'user'], data.user)
-        queryClient.invalidateQueries({ queryKey: ['auth', 'session'] })
-      }
-    },
-  })
-
-  const signUpMutation = useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) => 
-      authService.signUp(email, password),
-    onSuccess: (data) => {
-      if (data.user) {
-        queryClient.setQueryData(['auth', 'user'], data.user)
-        queryClient.invalidateQueries({ queryKey: ['auth', 'session'] })
-      }
-    },
-  })
-
-  const signOutMutation = useMutation({
-    mutationFn: authService.signOut,
-    onSuccess: () => {
-      queryClient.setQueryData(['auth', 'user'], null)
-      queryClient.setQueryData(['auth', 'session'], null)
-      queryClient.clear()
-    },
-  })
-
-  const signInWithGoogleMutation = useMutation({
-    mutationFn: authService.signInWithGoogle,
-  })
-
-  // Listen for auth changes
+  // Listen for auth state changes
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN') {
-          queryClient.setQueryData(['auth', 'user'], session?.user || null)
-          queryClient.setQueryData(['auth', 'session'], session)
-        } else if (event === 'SIGNED_OUT') {
-          queryClient.setQueryData(['auth', 'user'], null)
-          queryClient.setQueryData(['auth', 'session'], null)
-        }
-      }
-    )
+    setIsLoading(true)
+    
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(convertUser(firebaseUser))
+      setIsLoading(false)
+    })
 
-    return () => subscription.unsubscribe()
-  }, [queryClient])
+    return () => unsubscribe()
+  }, [auth])
+
+  // Sign in with email and password
+  const signIn = async (email: string, password: string): Promise<AuthUser> => {
+    setIsSigningIn(true)
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password)
+      const authUser = convertUser(result.user)
+      if (!authUser) {
+        throw new Error('Failed to get user data after sign in')
+      }
+      return authUser
+    } catch (error) {
+      console.error('Sign in error:', error)
+      throw error
+    } finally {
+      setIsSigningIn(false)
+    }
+  }
+
+  // Sign up with email and password
+  const signUp = async (email: string, password: string): Promise<AuthUser> => {
+    setIsSigningUp(true)
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, password)
+      const authUser = convertUser(result.user)
+      if (!authUser) {
+        throw new Error('Failed to get user data after sign up')
+      }
+      return authUser
+    } catch (error) {
+      console.error('Sign up error:', error)
+      throw error
+    } finally {
+      setIsSigningUp(false)
+    }
+  }
+
+  // Sign in with Google
+  const signInWithGoogle = async (): Promise<AuthUser> => {
+    setIsSigningIn(true)
+    try {
+      const provider = new GoogleAuthProvider()
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      })
+      
+      const result = await signInWithPopup(auth, provider)
+      const authUser = convertUser(result.user)
+      if (!authUser) {
+        throw new Error('Failed to get user data after Google sign in')
+      }
+      return authUser
+    } catch (error) {
+      console.error('Google sign in error:', error)
+      throw error
+    } finally {
+      setIsSigningIn(false)
+    }
+  }
+
+  // Sign out
+  const signOut = async (): Promise<void> => {
+    setIsSigningOut(true)
+    try {
+      await firebaseSignOut(auth)
+    } catch (error) {
+      console.error('Sign out error:', error)
+      throw error
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
 
   return {
     user,
-    session,
     isLoading,
     isAuthenticated: !!user,
-    signIn: signInMutation.mutateAsync,
-    signUp: signUpMutation.mutateAsync,
-    signOut: signOutMutation.mutateAsync,
-    signInWithGoogle: signInWithGoogleMutation.mutateAsync,
-    isSigningIn: signInMutation.isPending,
-    isSigningUp: signUpMutation.isPending,
-    isSigningOut: signOutMutation.isPending,
+    signIn,
+    signUp,
+    signOut,
+    signInWithGoogle,
+    isSigningIn,
+    isSigningUp,
+    isSigningOut,
   }
 }

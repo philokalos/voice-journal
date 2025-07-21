@@ -65,7 +65,7 @@ export const Settings: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">User ID</label>
-                  <p className="mt-1 text-sm text-gray-500 font-mono">{user?.id}</p>
+                  <p className="mt-1 text-sm text-gray-500 font-mono">{user?.uid}</p>
                 </div>
               </div>
             </div>

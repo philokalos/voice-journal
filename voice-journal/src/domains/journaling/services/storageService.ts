@@ -1,5 +1,5 @@
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage } from '../../../lib/firebase';
+import { getFirebaseStorage } from '../../../lib/firebase';
 
 export interface VoiceUploadResult {
   url: string;
@@ -20,6 +20,7 @@ export class StorageService {
   ): Promise<VoiceUploadResult> {
     try {
       const fileName = this.generateFileName(userId, entryId);
+      const storage = getFirebaseStorage();
       const storageRef = ref(storage, fileName);
       
       const snapshot = await uploadBytes(storageRef, audioBlob, {
@@ -46,6 +47,7 @@ export class StorageService {
 
   static async deleteVoiceFile(filePath: string): Promise<void> {
     try {
+      const storage = getFirebaseStorage();
       const storageRef = ref(storage, filePath);
       await deleteObject(storageRef);
     } catch (error) {
@@ -56,6 +58,7 @@ export class StorageService {
 
   static async getVoiceFileURL(filePath: string): Promise<string> {
     try {
+      const storage = getFirebaseStorage();
       const storageRef = ref(storage, filePath);
       return await getDownloadURL(storageRef);
     } catch (error) {

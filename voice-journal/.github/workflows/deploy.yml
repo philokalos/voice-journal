@@ -1,0 +1,261 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+env:
+  NODE_VERSION: 18
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  # 코드 품질 및 보안 검사
+  quality-check:
+    name: Quality & Security Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Run type checking
+        run: npm run type-check
+
+      - name: Run security scan
+        run: npm run security-check
+
+      - name: Check for secrets
+        run: node scripts/check-secrets.js
+
+  # 빌드 테스트
+  build-test:
+    name: Build Test
+    runs-on: ubuntu-latest
+    needs: quality-check
+    strategy:
+      matrix:
+        environment: [staging, production]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set environment variables
+        run: |
+          if [ "${{ matrix.environment }}" = "production" ]; then
+            echo "VITE_SUPABASE_URL=${{ secrets.PROD_VITE_SUPABASE_URL }}" >> $GITHUB_ENV
+            echo "VITE_SUPABASE_ANON_KEY=${{ secrets.PROD_VITE_SUPABASE_ANON_KEY }}" >> $GITHUB_ENV
+          else
+            echo "VITE_SUPABASE_URL=${{ secrets.STAGING_VITE_SUPABASE_URL }}" >> $GITHUB_ENV
+            echo "VITE_SUPABASE_ANON_KEY=${{ secrets.STAGING_VITE_SUPABASE_ANON_KEY }}" >> $GITHUB_ENV
+          fi
+
+      - name: Build application
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.environment }}
+          path: dist/
+          retention-days: 7
+
+  # Vercel 배포 (Production)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [quality-check, build-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://voice-journal.vercel.app
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project Artifacts
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy Project Artifacts to Vercel
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+
+      - name: Create deployment status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: context.payload.deployment?.id || 0,
+              state: 'success',
+              environment_url: '${{ steps.deploy.outputs.url }}',
+              description: 'Production deployment successful'
+            });
+
+  # Vercel 배포 (Staging)
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [quality-check, build-test]
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
+    environment:
+      name: staging
+      url: https://voice-journal-staging.vercel.app
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project Artifacts
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy Project Artifacts to Vercel
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+
+      - name: Comment deployment URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🚀 Staging deployment ready at: ${{ steps.deploy.outputs.url }}'
+            });
+
+  # PR 미리보기 배포
+  deploy-preview:
+    name: Deploy Preview
+    runs-on: ubuntu-latest
+    needs: quality-check
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project Artifacts
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy Project Artifacts to Vercel
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+
+      - name: Comment preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '📱 Preview deployment ready at: ${{ steps.deploy.outputs.url }}'
+            });
+
+  # 배포 후 헬스 체크
+  health-check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Wait for deployment
+        run: sleep 30
+
+      - name: Check application health
+        run: |
+          curl -f https://voice-journal.vercel.app/health || exit 1
+          echo "✅ Application is healthy"
+
+      - name: Test core functionality
+        run: |
+          response=$(curl -s https://voice-journal.vercel.app/)
+          if echo "$response" | grep -q "Voice Journal"; then
+            echo "✅ Frontend is loading correctly"
+          else
+            echo "❌ Frontend check failed"
+            exit 1
+          fi
+
+  # 알림
+  notify:
+    name: Notify Team
+    runs-on: ubuntu-latest
+    needs: [deploy-production, health-check]
+    if: always() && github.ref == 'refs/heads/main'
+    steps:
+      - name: Notify success
+        if: needs.deploy-production.result == 'success' && needs.health-check.result == 'success'
+        run: |
+          echo "🎉 Production deployment successful!"
+          echo "URL: https://voice-journal.vercel.app"
+
+      - name: Notify failure
+        if: needs.deploy-production.result == 'failure' || needs.health-check.result == 'failure'
+        run: |
+          echo "🚨 Production deployment failed!"
+          echo "Please check the logs and fix the issues."

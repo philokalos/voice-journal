@@ -1,67 +1,62 @@
-import { supabase } from '../../../lib/supabase'
-// MVP: Disabled offline features
-// import { OfflineStorageService } from '../../../lib/offlineDB'
+import { getFirebaseAuth, getFirebaseFirestore } from '../../../lib/firebase'
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore'
 import type { Entry } from '../../../shared/types/entry'
 
 export interface CreateEntryRequest {
-  content: string
+  transcript: string
   date: string
-  sentiment?: string
+  sentiment_score?: number
   keywords?: string[]
   wins?: string[]
   regrets?: string[]
-  todos?: string[]
-  // MVP: Simplified without audio features for now
-  // id?: string
-  // user_id?: string
-  // has_audio?: boolean
-  // audio_url?: string
-  // audio_path?: string
-  // audio_size?: number
+  tasks?: string[]
+  audio_file_path?: string
 }
 
 export interface UpdateEntryRequest {
   id: string
-  content?: string
-  sentiment?: string
+  transcript?: string
+  sentiment_score?: number
   keywords?: string[]
   wins?: string[]
   regrets?: string[]
-  todos?: string[]
+  tasks?: string[]
+  audio_file_path?: string
 }
 
 export class EntryService {
   // Create a new entry
   static async createEntry(request: CreateEntryRequest): Promise<Entry> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const auth = getFirebaseAuth()
+      const user = auth.currentUser
       if (!user) {
         throw new Error('User not authenticated')
       }
 
       // MVP: Create entry with basic fields only
       const entryData = {
-        user_id: user.id,
-        content: request.content,
+        user_id: user.uid,
+        transcript: request.transcript,
         date: request.date,
-        sentiment: request.sentiment || null,
+        sentiment_score: request.sentiment_score || 0,
         keywords: request.keywords || [],
         wins: request.wins || [],
         regrets: request.regrets || [],
-        todos: request.todos || []
+        tasks: request.tasks || [],
+        audio_file_path: request.audio_file_path,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }
 
-      const { data, error } = await supabase
-        .from('entries')
-        .insert(entryData)
-        .select()
-        .single()
-
-      if (error) {
-        throw error
-      }
-
-      return data as Entry
+      const firestore = getFirebaseFirestore()
+      const entriesRef = collection(firestore, 'entries')
+      const docRef = await addDoc(entriesRef, entryData)
+      
+      return {
+        id: docRef.id,
+        ...entryData
+      } as Entry
     } catch (error) {
       console.error('Failed to create entry:', error)
       
@@ -87,22 +82,31 @@ export class EntryService {
   // Get all entries for the current user
   static async getEntries(): Promise<Entry[]> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const auth = getFirebaseAuth()
+      const user = auth.currentUser
       if (!user) {
         throw new Error('User not authenticated')
       }
 
-      const { data, error } = await supabase
-        .from('entries')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('date', { ascending: false })
+      const firestore = getFirebaseFirestore()
+      const entriesRef = collection(firestore, 'entries')
+      const q = query(
+        entriesRef,
+        where('user_id', '==', user.uid),
+        orderBy('date', 'desc')
+      )
+      
+      const querySnapshot = await getDocs(q)
+      const entries: Entry[] = []
+      
+      querySnapshot.forEach((doc) => {
+        entries.push({
+          id: doc.id,
+          ...doc.data()
+        } as Entry)
+      })
 
-      if (error) {
-        throw error
-      }
-
-      return data as Entry[]
+      return entries
     } catch (error) {
       console.error('Failed to fetch entries:', error)
       throw error
@@ -112,23 +116,29 @@ export class EntryService {
   // Get a single entry by ID
   static async getEntry(id: string): Promise<Entry> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const auth = getFirebaseAuth()
+      const user = auth.currentUser
       if (!user) {
         throw new Error('User not authenticated')
       }
 
-      const { data, error } = await supabase
-        .from('entries')
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .single()
+      const firestore = getFirebaseFirestore()
+      const entryRef = doc(firestore, 'entries', id)
+      const entrySnap = await getDoc(entryRef)
 
-      if (error) {
-        throw error
+      if (!entrySnap.exists()) {
+        throw new Error('Entry not found')
       }
 
-      return data as Entry
+      const entryData = entrySnap.data()
+      if (entryData.user_id !== user.uid) {
+        throw new Error('Unauthorized access to entry')
+      }
+
+      return {
+        id: entrySnap.id,
+        ...entryData
+      } as Entry
     } catch (error) {
       console.error('Failed to fetch entry:', error)
       throw error
@@ -138,26 +148,41 @@ export class EntryService {
   // Update an existing entry
   static async updateEntry(request: UpdateEntryRequest): Promise<Entry> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const auth = getFirebaseAuth()
+      const user = auth.currentUser
       if (!user) {
         throw new Error('User not authenticated')
       }
 
       const { id, ...updateData } = request
-
-      const { data, error } = await supabase
-        .from('entries')
-        .update(updateData)
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .select()
-        .single()
-
-      if (error) {
-        throw error
+      const firestore = getFirebaseFirestore()
+      const entryRef = doc(firestore, 'entries', id)
+      
+      // First verify the entry exists and belongs to the user
+      const entrySnap = await getDoc(entryRef)
+      if (!entrySnap.exists()) {
+        throw new Error('Entry not found')
+      }
+      
+      const existingData = entrySnap.data()
+      if (existingData.user_id !== user.uid) {
+        throw new Error('Unauthorized access to entry')
       }
 
-      return data as Entry
+      // Update the entry
+      const updatedData = {
+        ...updateData,
+        updated_at: new Date().toISOString()
+      }
+      
+      await updateDoc(entryRef, updatedData)
+      
+      // Return the updated entry
+      return {
+        id,
+        ...existingData,
+        ...updatedData
+      } as Entry
     } catch (error) {
       console.error('Failed to update entry:', error)
       throw error
@@ -167,20 +192,27 @@ export class EntryService {
   // Delete an entry
   static async deleteEntry(id: string): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const auth = getFirebaseAuth()
+      const user = auth.currentUser
       if (!user) {
         throw new Error('User not authenticated')
       }
 
-      const { error } = await supabase
-        .from('entries')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id)
-
-      if (error) {
-        throw error
+      const firestore = getFirebaseFirestore()
+      const entryRef = doc(firestore, 'entries', id)
+      
+      // Verify the entry exists and belongs to the user
+      const entrySnap = await getDoc(entryRef)
+      if (!entrySnap.exists()) {
+        throw new Error('Entry not found')
       }
+      
+      const entryData = entrySnap.data()
+      if (entryData.user_id !== user.uid) {
+        throw new Error('Unauthorized access to entry')
+      }
+
+      await deleteDoc(entryRef)
     } catch (error) {
       console.error('Failed to delete entry:', error)
       throw error
@@ -190,23 +222,24 @@ export class EntryService {
   // Search entries by content
   static async searchEntries(query: string): Promise<Entry[]> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const auth = getFirebaseAuth()
+      const user = auth.currentUser
       if (!user) {
         throw new Error('User not authenticated')
       }
 
-      const { data, error } = await supabase
-        .from('entries')
-        .select('*')
-        .eq('user_id', user.id)
-        .textSearch('content', query)
-        .order('date', { ascending: false })
-
-      if (error) {
-        throw error
-      }
-
-      return data as Entry[]
+      // For now, get all entries and filter client-side
+      // TODO: Implement full-text search with Firebase extensions or Algolia
+      const entries = await this.getEntries()
+      
+      const searchQuery = query.toLowerCase()
+      return entries.filter(entry => 
+        entry.transcript.toLowerCase().includes(searchQuery) ||
+        entry.keywords?.some(keyword => keyword.toLowerCase().includes(searchQuery)) ||
+        entry.wins?.some(win => win.toLowerCase().includes(searchQuery)) ||
+        entry.regrets?.some(regret => regret.toLowerCase().includes(searchQuery)) ||
+        entry.tasks?.some(task => task.toLowerCase().includes(searchQuery))
+      )
     } catch (error) {
       console.error('Failed to search entries:', error)
       throw error
