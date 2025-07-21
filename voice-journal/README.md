@@ -1,4 +1,4 @@
-# 🎙️ Voice Journal
+# 🎙️ Voice Journal - Production Ready
 
 A mobile-first journaling assistant that lets users speak about their day, automatically transcribes audio, and extracts key reflections for organized self-improvement.
 
