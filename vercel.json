@@ -2,7 +2,7 @@
   "buildCommand": "cd voice-journal && npm run build",
   "outputDirectory": "voice-journal/dist",
   "framework": "vite",
-  "installCommand": "cd voice-journal && npm install",
+  "installCommand": "cd voice-journal && npm ci --legacy-peer-deps",
   "devCommand": "cd voice-journal && npm run dev",
   "routes": [
     {

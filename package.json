@@ -2,7 +2,7 @@
   "name": "voice-journal-root",
   "version": "1.0.0",
   "scripts": {
-    "install": "cd voice-journal && npm install",
+    "install": "cd voice-journal && npm ci --legacy-peer-deps",
     "build": "cd voice-journal && npm run build",
     "dev": "cd voice-journal && npm run dev"
   },
