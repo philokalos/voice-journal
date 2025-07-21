@@ -1,0 +1,40 @@
+{
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "emmet.includeLanguages": {
+    "typescript": "html",
+    "typescriptreact": "html"
+  },
+  "tailwindCSS.experimental.classRegex": [
+    "tw`([^`]*)",
+    "tw=\"([^\"]*)",
+    "tw={\"([^\"}]*)",
+    "tw\\.\\w+`([^`]*)",
+    "tw\\(.*?\\)`([^`]*)"
+  ],
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/lib": true,
+    "**/.git": true
+  },
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "functions/lib": true
+  },
+  "typescript.suggest.autoImports": true,
+  "javascript.suggest.autoImports": true,
+  "editor.suggestSelection": "first",
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "prettier.semi": false,
+  "prettier.singleQuote": true,
+  "prettier.trailingComma": "es5"
+}

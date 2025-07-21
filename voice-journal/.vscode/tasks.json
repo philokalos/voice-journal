@@ -1,0 +1,75 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "dev",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "label": "npm: dev - voice-journal",
+      "detail": "npm run dev",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "type": "npm",
+      "script": "build",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "label": "npm: build - voice-journal",
+      "detail": "npm run build",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "type": "shell",
+      "command": "cd functions && npm run build",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "label": "Firebase: build functions",
+      "detail": "Build Firebase Cloud Functions",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "type": "shell",
+      "command": "firebase emulators:start",
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "label": "Firebase: start emulators",
+      "detail": "Start Firebase emulators"
+    },
+    {
+      "type": "shell",
+      "command": "firebase deploy",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "label": "Firebase: deploy",
+      "detail": "Deploy to Firebase"
+    }
+  ]
+}

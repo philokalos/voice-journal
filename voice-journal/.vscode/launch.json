@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug React App",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/.bin/vite",
+      "args": ["--mode", "development"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Debug Firebase Functions",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/functions/lib/index.js",
+      "env": {
+        "NODE_ENV": "development",
+        "FUNCTIONS_EMULATOR": "true"
+      },
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Attach to Chrome",
+      "port": 9222,
+      "request": "attach",
+      "type": "chrome",
+      "webRoot": "${workspaceFolder}/src",
+      "sourceMaps": true
+    }
+  ]
+}
