@@ -284,4 +284,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Made with ❤️ by the Voice Journal team**
 
-*Helping people reflect, grow, and organize their lives through effortless voice journaling.*
+*Helping people reflect, grow, and organize their lives through effortless voice journaling.*# Force rebuild Tue Jul 29 21:59:56 KST 2025
