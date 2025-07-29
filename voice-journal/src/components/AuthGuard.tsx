@@ -8,7 +8,30 @@ interface AuthGuardProps {
 }
 
 export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, error } = useAuth()
+  
+  // Show error state if Firebase is not available
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="glass-card text-center" style={{padding: 'var(--spacing-3xl)'}}>
+          <h2 className="font-bold text-red-600" style={{fontSize: 'var(--text-2xl)', marginBottom: 'var(--spacing-sm)'}}>서비스 연결 오류</h2>
+          <p className="text-gray-700" style={{fontSize: 'var(--text-base)', marginBottom: 'var(--spacing-md)'}}>
+            현재 서비스에 연결할 수 없습니다.
+          </p>
+          <p className="text-gray-500" style={{fontSize: 'var(--text-sm)'}}>
+            잠시 후 다시 시도해주세요.
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
+          >
+            새로고침
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (isLoading) {
     return (

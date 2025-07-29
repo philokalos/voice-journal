@@ -361,8 +361,26 @@ export const Dashboard: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                     </svg>
                   </div>
+                  <h2 className="font-bold text-gradient" style={{fontSize: 'var(--text-xl)'}}>나의 일기</h2>
                 </div>
                 <div className="flex items-center" style={{gap: 'var(--spacing-lg)'}}>
+                  {/* Generate Summary Button */}
+                  {entries.length > 0 && (
+                    <button
+                      onClick={() => {
+                        // TODO: Implement summary generation
+                        alert('요약 생성 기능은 준비 중입니다!')
+                      }}
+                      className="glass-button flex items-center"
+                      style={{padding: 'var(--spacing-md) var(--spacing-lg)', gap: 'var(--spacing-sm)'}}
+                    >
+                      <svg className="icon-standard" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3-6h2.25m0 0l1.5-1.5m-1.5 1.5l1.5 1.5M5.625 3H18a2.25 2.25 0 012.25 2.25v4.5H15.75a2.25 2.25 0 00-2.25 2.25v4.5H5.625A2.625 2.625 0 013 13.125V5.625A2.625 2.625 0 015.625 3z" />
+                      </svg>
+                      <span>요약 생성</span>
+                    </button>
+                  )}
+                  
                   {/* Sync Status Indicator */}
                   {user && (
                     <div className="glass-card bg-opacity-60" style={{padding: 'var(--spacing-sm) var(--spacing-md)'}}>

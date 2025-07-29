@@ -27,6 +27,13 @@ export interface AppConfig {
 
 function validateEnvVar(name: string, value: string | undefined, required: boolean = true): string | undefined {
   if (!value && required) {
+    console.error(`Missing required environment variable: ${name}`);
+    console.error('Available env vars:', Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')));
+    // In production, provide fallback instead of throwing
+    if (import.meta.env.PROD) {
+      console.warn(`Using fallback for ${name} in production`);
+      return name.includes('FIREBASE') ? 'fallback-value' : undefined;
+    }
     throw new Error(`Missing required environment variable: ${name}`)
   }
   if (!value && !required) {

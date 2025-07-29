@@ -21,6 +21,11 @@ function App() {
               <Settings />
             </AuthGuard>
           } />
+          <Route path="/journal" element={
+            <AuthGuard>
+              <Dashboard />
+            </AuthGuard>
+          } />
           <Route path="/" element={
             <AuthGuard>
               <Dashboard />

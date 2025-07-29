@@ -24,8 +24,15 @@ export const useAuth = () => {
   const [isSigningIn, setIsSigningIn] = useState(false)
   const [isSigningUp, setIsSigningUp] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const auth = getFirebaseAuth()
+  let auth: any = null;
+  try {
+    auth = getFirebaseAuth()
+  } catch (firebaseError) {
+    console.error('Firebase Auth not available:', firebaseError)
+    setError('Firebase 서비스에 연결할 수 없습니다.')
+  }
 
   // Convert Firebase User to AuthUser
   const convertUser = (firebaseUser: User | null): AuthUser | null => {
@@ -41,6 +48,11 @@ export const useAuth = () => {
 
   // Listen for auth state changes
   useEffect(() => {
+    if (!auth) {
+      setIsLoading(false)
+      return
+    }
+    
     setIsLoading(true)
     
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -49,7 +61,7 @@ export const useAuth = () => {
     })
 
     return () => unsubscribe()
-  }, [])
+  }, [auth])
 
   // Sign in with email and password
   const signIn = async (email: string, password: string): Promise<AuthUser> => {
@@ -149,6 +161,7 @@ export const useAuth = () => {
     user,
     isLoading,
     isAuthenticated: !!user,
+    error,
     signIn,
     signUp,
     signOut,

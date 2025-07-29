@@ -22,7 +22,16 @@ try {
   console.log(`📊 Project: ${config.firebase.projectId}`);
 } catch (error) {
   console.error('❌ Firebase initialization failed:', error);
-  throw new Error('Firebase is required for Voice Journal to function properly');
+  console.error('Environment check:', {
+    hasApiKey: !!import.meta.env.VITE_FIREBASE_API_KEY,
+    hasProjectId: !!import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    isDev: import.meta.env.DEV,
+    isProd: import.meta.env.PROD
+  });
+  // Don't throw error in production to allow graceful fallback
+  if (import.meta.env.DEV) {
+    throw new Error('Firebase is required for Voice Journal to function properly');
+  }
 }
 
 export { 
