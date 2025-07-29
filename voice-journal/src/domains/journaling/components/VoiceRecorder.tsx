@@ -177,79 +177,144 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   return (
     <div className={`voice-recorder ${className}`}>
       {/* Recording Button */}
-      <div className="flex flex-col items-center space-y-4">
-        <button
-          onClick={state.isRecording ? stopRecording : startRecording}
-          disabled={disabled || state.isProcessing || !isWebSpeechAvailable}
-          className={`
-            w-16 h-16 rounded-full border-4 flex items-center justify-center
-            transition-all duration-200
-            ${state.isRecording 
-              ? 'bg-red-500 border-red-600 animate-pulse' 
-              : 'bg-blue-500 border-blue-600 hover:bg-blue-600'
-            }
-            ${disabled || state.isProcessing || !isWebSpeechAvailable
-              ? 'opacity-50 cursor-not-allowed' 
-              : 'cursor-pointer'
-            }
-          `}
-        >
-          {state.isProcessing ? (
-            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : state.isRecording ? (
-            <div className="w-4 h-4 bg-white rounded-sm" />
-          ) : (
-            <div className="w-6 h-6 border-l-4 border-l-white border-t-2 border-t-transparent border-b-2 border-b-transparent ml-1" />
+      <div className="flex flex-col items-center" style={{gap: 'var(--spacing-lg)'}}>
+        <div className="relative">
+          {/* Pulse rings for recording */}
+          {state.isRecording && (
+            <>
+              <div className="absolute inset-0 bg-red-400 rounded-full animate-ping opacity-30" style={{width: '80px', height: '80px'}}></div>
+              <div className="absolute bg-red-400 rounded-full animate-ping opacity-50" style={{width: '64px', height: '64px', top: '8px', left: '8px', animationDelay: '0.5s'}}></div>
+            </>
           )}
-        </button>
-
-        {/* Duration */}
-        {state.isRecording && (
-          <div className="text-sm font-mono text-gray-600">
-            {formatDuration(state.duration)}
-          </div>
-        )}
+          
+          <button
+            onClick={state.isRecording ? stopRecording : startRecording}
+            disabled={disabled || state.isProcessing || !isWebSpeechAvailable}
+            className={`
+              relative glass-card flex items-center justify-center transition-all duration-300 transform hover:scale-105
+              ${state.isRecording 
+                ? 'bg-gradient-to-br from-red-500 to-red-600 animate-pulse-glow' 
+                : 'bg-gradient-to-br from-purple-600 to-blue-600'
+              }
+              ${disabled || state.isProcessing || !isWebSpeechAvailable
+                ? 'opacity-50 cursor-not-allowed transform-none' 
+                : 'cursor-pointer'
+              }
+            `}
+            style={{width: '80px', height: '80px'}}
+          >
+            {state.isProcessing ? (
+              <div className="border-3 border-white border-t-transparent rounded-full animate-spin" style={{width: '32px', height: '32px'}} />
+            ) : state.isRecording ? (
+              <div className="bg-white rounded-lg shadow-lg" style={{width: 'var(--spacing-lg)', height: 'var(--spacing-lg)'}} />
+            ) : (
+              <svg className="text-white" style={{width: '32px', height: '32px', marginLeft: '2px'}} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+              </svg>
+            )}
+          </button>
+        </div>
 
         {/* Status */}
-        {state.isProcessing && (
-          <div className="text-sm text-blue-600">
-            Processing transcript...
-          </div>
-        )}
+        <div className="text-center" style={{display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)'}}>
+          {state.isRecording && (
+            <div className="glass-card bg-red-50 bg-opacity-80 animate-slide-up" style={{padding: 'var(--spacing-md) var(--spacing-lg)'}}>
+              <div className="flex items-center justify-center" style={{gap: 'var(--spacing-md)'}}>
+                <div className="bg-red-500 rounded-full animate-pulse" style={{width: '12px', height: '12px'}}></div>
+                <span className="font-bold font-mono text-red-700" style={{fontSize: 'var(--text-sm)'}}>
+                  {formatDuration(state.duration)}
+                </span>
+                <div className="text-red-600" style={{fontSize: 'var(--text-xs)'}}>녹음 중</div>
+              </div>
+            </div>
+          )}
+          
+          {state.isProcessing && (
+            <div className="glass-card bg-blue-50 bg-opacity-80 animate-slide-up" style={{padding: 'var(--spacing-md) var(--spacing-lg)'}}>
+              <div className="flex items-center justify-center" style={{gap: 'var(--spacing-md)'}}>
+                <div className="bg-blue-500 rounded-full animate-pulse" style={{width: '12px', height: '12px'}}></div>
+                <span className="font-semibold text-blue-700" style={{fontSize: 'var(--text-sm)'}}>
+                  처리 중...
+                </span>
+              </div>
+            </div>
+          )}
+          
+          {!state.isRecording && !state.isProcessing && (
+            <div className="glass-card bg-gray-50 bg-opacity-80" style={{padding: 'var(--spacing-lg) var(--spacing-xl)'}}>
+              <span style={{
+                fontSize: 'var(--text-sm)', 
+                color: 'var(--color-neutral-600)',
+                fontWeight: 'var(--font-weight-normal)'
+              }}>
+                {isWebSpeechAvailable ? '탭하여 녹음 시작' : '음성 인식 비지원'}
+              </span>
+            </div>
+          )}
+        </div>
+
       </div>
 
-      {/* Results */}
+      {/* Live Transcript Preview */}
       {state.transcript && (
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">
-              Transcript
-            </span>
-            {state.confidence && (
-              <span className="text-xs text-gray-500">
-                Confidence: {Math.round(state.confidence * 100)}%
+        <div className="mt-6 glass-card bg-gradient-to-br from-green-50 to-blue-50 bg-opacity-50 p-6 animate-slide-up">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-sm font-bold text-gray-700">
+                실시간 전사 결과
               </span>
+            </div>
+            {state.confidence && (
+              <div className="glass-card bg-white bg-opacity-60 px-3 py-1">
+                <div className="flex items-center space-x-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    state.confidence > 0.8 ? 'bg-green-500' : 
+                    state.confidence > 0.6 ? 'bg-yellow-500' : 'bg-red-500'
+                  }`}></div>
+                  <span className="text-xs font-medium text-gray-600">
+                    정확도: {Math.round(state.confidence * 100)}%
+                  </span>
+                </div>
+              </div>
             )}
           </div>
-          
-          <p className="text-sm text-gray-800">{state.transcript}</p>
+          <p className="text-gray-800 leading-relaxed font-medium">{state.transcript}</p>
         </div>
       )}
 
       {/* Error Display */}
       {state.error && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-700">{state.error}</p>
+        <div className="mt-6 glass-card bg-red-50 bg-opacity-80 p-6 animate-slide-up">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 glass-card bg-red-500 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-red-800 mb-1">오류 발생</h4>
+              <p className="text-sm text-red-700">{state.error}</p>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Support Info */}
-      <div className="mt-4 text-xs text-gray-500">
-        {isWebSpeechAvailable 
-          ? '🎤 Web Speech API available' 
-          : '⚠️ Web Speech API not supported in this browser'
-        }
-      </div>
+      {!isWebSpeechAvailable && (
+        <div className="mt-6 text-center">
+          <div className="glass-card bg-yellow-50 bg-opacity-80 px-6 py-4">
+            <div className="flex items-center justify-center space-x-2">
+              <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <span className="text-sm font-medium text-yellow-800">
+                이 브라우저에서는 음성 인식이 지원되지 않습니다
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

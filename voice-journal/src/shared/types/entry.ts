@@ -11,6 +11,7 @@ export interface Entry {
   audio_file_path?: string
   created_at: string // ISO datetime string
   updated_at: string // ISO datetime string
+  sync_status?: SyncStatusInfo
 }
 
 export interface CreateEntryRequest {
@@ -54,4 +55,21 @@ export interface AudioUploadResult {
   file_path: string
   file_url: string
   file_size: number
+}
+
+export type SyncService = 'googleSheets' | 'notion'
+export type SyncStatus = 'synced' | 'failed' | 'pending' | 'never_synced'
+
+export interface ServiceSyncStatus {
+  status: SyncStatus
+  last_sync_at?: string // ISO datetime string
+  last_error?: string
+  retry_count?: number
+  next_retry_at?: string // ISO datetime string for failed syncs
+}
+
+export interface SyncStatusInfo {
+  googleSheets?: ServiceSyncStatus
+  notion?: ServiceSyncStatus
+  last_updated: string // ISO datetime string
 }

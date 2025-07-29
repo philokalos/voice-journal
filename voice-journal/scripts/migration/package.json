@@ -1,0 +1,27 @@
+{
+  "name": "supabase-to-firebase-migration",
+  "version": "1.0.0",
+  "description": "One-time migration script to transfer data from Supabase to Firebase",
+  "main": "migrate.js",
+  "type": "module",
+  "scripts": {
+    "test-config": "node test-config.js",
+    "migrate": "node migrate.js",
+    "migrate:dry-run": "node migrate.js --dry-run",
+    "migrate:users-only": "node migrate.js --users-only",
+    "migrate:entries-only": "node migrate.js --entries-only",
+    "migrate:audio-only": "node migrate.js --audio-only",
+    "validate": "node validate.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.7",
+    "firebase-admin": "^12.0.0",
+    "dotenv": "^16.4.5",
+    "fs-extra": "^11.2.0",
+    "node-fetch": "^3.3.2",
+    "progress": "^2.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

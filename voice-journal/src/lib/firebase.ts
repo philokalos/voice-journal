@@ -2,6 +2,7 @@ import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { getFunctions, Functions } from 'firebase/functions';
 import { config } from './config';
 
 // Firebase is the primary backend - initialize with required configuration
@@ -9,12 +10,14 @@ let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let firestore: Firestore | null = null;
 let storage: FirebaseStorage | null = null;
+let functions: Functions | null = null;
 
 try {
   app = initializeApp(config.firebase);
   auth = getAuth(app);
   firestore = getFirestore(app);
   storage = getStorage(app);
+  functions = getFunctions(app);
   console.log('🔥 Firebase initialized successfully');
   console.log(`📊 Project: ${config.firebase.projectId}`);
 } catch (error) {
@@ -26,7 +29,8 @@ export {
   app as firebaseApp, 
   auth as firebaseAuth,
   firestore as firebaseFirestore,
-  storage as firebaseStorage 
+  storage as firebaseStorage,
+  functions as firebaseFunctions
 };
 
 
@@ -50,4 +54,11 @@ export const getFirebaseStorage = (): FirebaseStorage => {
     throw new Error('Firebase Storage not initialized');
   }
   return storage;
+};
+
+export const getFirebaseFunctions = (): Functions => {
+  if (!functions) {
+    throw new Error('Firebase Functions not initialized');
+  }
+  return functions;
 };

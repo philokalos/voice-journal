@@ -1,6 +1,12 @@
 import { getFirebaseAuth, getFirebaseFirestore } from '../../../lib/firebase'
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore'
 import type { Entry } from '../../../shared/types/entry'
+import { SentimentService } from './sentimentService'
+import { GoogleSheetsService } from '../../integrations/services/googleSheetsService'
+import { NotionService } from '../../integrations/services/notionService'
+import { SyncStatusManager } from '../../integrations/utils/syncStatusManager'
+import { OfflineStorageService, OfflineEntry } from './offlineStorageService'
+import { SyncService } from './syncService'
 
 export interface CreateEntryRequest {
   transcript: string
@@ -25,16 +31,22 @@ export interface UpdateEntryRequest {
 }
 
 export class EntryService {
-  // Create a new entry
-  static async createEntry(request: CreateEntryRequest): Promise<Entry> {
+  // Create a new entry (with offline support)
+  static async createEntry(request: CreateEntryRequest): Promise<Entry | OfflineEntry> {
+    console.log('🔥 EntryService.createEntry called with:', request)
+    
     try {
       const auth = getFirebaseAuth()
+      console.log('🔐 Firebase auth retrieved')
+      
       const user = auth.currentUser
+      console.log('👤 Current user:', user ? { uid: user.uid, email: user.email } : 'null')
+      
       if (!user) {
         throw new Error('User not authenticated')
       }
 
-      // MVP: Create entry with basic fields only
+      // Prepare entry data
       const entryData = {
         user_id: user.uid,
         transcript: request.transcript,
@@ -49,38 +61,69 @@ export class EntryService {
         updated_at: new Date().toISOString()
       }
 
-      const firestore = getFirebaseFirestore()
-      const entriesRef = collection(firestore, 'entries')
-      const docRef = await addDoc(entriesRef, entryData)
+      // Try online creation first
+      if (navigator.onLine) {
+        try {
+          const firestore = getFirebaseFirestore()
+          const entriesRef = collection(firestore, 'entries')
+          const docRef = await addDoc(entriesRef, entryData)
+          
+          const entry = {
+            id: docRef.id,
+            ...entryData
+          } as Entry
+
+          // Store in offline cache as synced
+          const offlineEntry = await OfflineStorageService.storeEntry(entryData)
+          await OfflineStorageService.markAsSynced(offlineEntry.localId, docRef.id)
+
+          // Perform sentiment analysis asynchronously
+          SentimentService.analyzeSentiment(docRef.id, request.transcript)
+            .catch(error => {
+              console.warn('Sentiment analysis failed for entry', docRef.id, ':', error)
+            })
+
+          // Initialize sync status tracking
+          await SyncStatusManager.initializeSyncStatus(docRef.id)
+            .catch(error => {
+              console.warn('Failed to initialize sync status for entry', docRef.id, ':', error)
+            })
+
+          // Auto-sync to integrations if available (asynchronously)
+          this.performAutoSync(entry)
+            .catch(error => {
+              console.warn('Auto-sync failed for entry', docRef.id, ':', error)
+            })
+          
+          return entry
+        } catch (onlineError) {
+          console.warn('Online entry creation failed, falling back to offline:', onlineError)
+          // Fall through to offline storage
+        }
+      }
+
+      // Store offline (either because we're offline or online creation failed)
+      console.log('Storing entry offline')
+      const offlineEntry = await OfflineStorageService.storeEntry(entryData)
       
-      return {
-        id: docRef.id,
-        ...entryData
-      } as Entry
+      // Try to analyze sentiment offline (basic analysis)
+      // This will be re-analyzed when synced online
+      if (request.transcript) {
+        this.performOfflineSentimentAnalysis(offlineEntry.localId, request.transcript)
+          .catch(error => {
+            console.warn('Offline sentiment analysis failed:', error)
+          })
+      }
+
+      return offlineEntry
     } catch (error) {
       console.error('Failed to create entry:', error)
-      
-      // MVP: No offline storage for now, just throw error
-      // try {
-      //   // Store offline if online operation fails
-      //   const offlineEntry = await OfflineStorageService.storeEntry({
-      //     id: request.id || crypto.randomUUID(),
-      //     user_id: request.user_id || 'offline',
-      //     ...request,
-      //     // MVP: No audio support in offline mode
-      //   })
-      //   return offlineEntry as Entry
-      // } catch (offlineError) {
-      //   console.error('Failed to store entry offline:', offlineError)
-      //   throw error
-      // }
-      
       throw error
     }
   }
 
-  // Get all entries for the current user
-  static async getEntries(): Promise<Entry[]> {
+  // Get all entries (online + offline)
+  static async getEntries(): Promise<(Entry | OfflineEntry)[]> {
     try {
       const auth = getFirebaseAuth()
       const user = auth.currentUser
@@ -88,25 +131,59 @@ export class EntryService {
         throw new Error('User not authenticated')
       }
 
-      const firestore = getFirebaseFirestore()
-      const entriesRef = collection(firestore, 'entries')
-      const q = query(
-        entriesRef,
-        where('user_id', '==', user.uid),
-        orderBy('date', 'desc')
-      )
+      // Always get offline entries first (includes cached online entries)
+      const offlineEntries = await OfflineStorageService.getEntries(user.uid)
       
-      const querySnapshot = await getDocs(q)
-      const entries: Entry[] = []
-      
-      querySnapshot.forEach((doc) => {
-        entries.push({
-          id: doc.id,
-          ...doc.data()
-        } as Entry)
-      })
+      // If online, try to get latest from Firestore and merge
+      if (navigator.onLine) {
+        try {
+          const firestore = getFirebaseFirestore()
+          const entriesRef = collection(firestore, 'entries')
+          const q = query(
+            entriesRef,
+            where('user_id', '==', user.uid),
+            orderBy('date', 'desc')
+          )
+          
+          const querySnapshot = await getDocs(q)
+          const onlineEntries: Entry[] = []
+          
+          querySnapshot.forEach((doc) => {
+            onlineEntries.push({
+              id: doc.id,
+              ...doc.data()
+            } as Entry)
+          })
 
-      return entries
+          // Merge online and offline entries, preferring synced offline entries
+          const mergedEntries: (Entry | OfflineEntry)[] = [...offlineEntries]
+          
+          // Add online entries that aren't already in offline cache
+          for (const onlineEntry of onlineEntries) {
+            const existsOffline = offlineEntries.some(offlineEntry => 
+              offlineEntry.id === onlineEntry.id
+            )
+            
+            if (!existsOffline) {
+              mergedEntries.push(onlineEntry)
+            }
+          }
+
+          // Sort by date (newest first)
+          mergedEntries.sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )
+
+          return mergedEntries
+        } catch (error) {
+          console.warn('Failed to fetch online entries, using offline cache:', error)
+        }
+      }
+
+      // Return offline entries if online fetch failed or we're offline
+      return offlineEntries.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
     } catch (error) {
       console.error('Failed to fetch entries:', error)
       throw error
@@ -145,8 +222,8 @@ export class EntryService {
     }
   }
 
-  // Update an existing entry
-  static async updateEntry(request: UpdateEntryRequest): Promise<Entry> {
+  // Update an existing entry (with offline support)
+  static async updateEntry(request: UpdateEntryRequest): Promise<Entry | OfflineEntry> {
     try {
       const auth = getFirebaseAuth()
       const user = auth.currentUser
@@ -155,6 +232,48 @@ export class EntryService {
       }
 
       const { id, ...updateData } = request
+      
+      // Check offline storage first
+      const offlineEntry = await OfflineStorageService.getEntry(id)
+      
+      if (offlineEntry) {
+        // Update in offline storage
+        const updatedData = {
+          ...updateData,
+          syncStatus: 'pending' as const,
+          updated_at: new Date().toISOString()
+        }
+        
+        await OfflineStorageService.updateEntry(offlineEntry.localId, updatedData)
+        
+        // Try online update if connected
+        if (navigator.onLine && offlineEntry.id) {
+          try {
+            const firestore = getFirebaseFirestore()
+            const entryRef = doc(firestore, 'entries', offlineEntry.id)
+            await updateDoc(entryRef, {
+              ...updateData,
+              updated_at: new Date().toISOString()
+            })
+            
+            // Mark as synced if online update succeeded
+            await OfflineStorageService.markAsSynced(offlineEntry.localId, offlineEntry.id)
+          } catch (onlineError) {
+            console.warn('Online update failed, entry marked for sync:', onlineError)
+          }
+        }
+        
+        return {
+          ...offlineEntry,
+          ...updatedData
+        }
+      }
+      
+      // Entry not in offline storage, try online update
+      if (!navigator.onLine) {
+        throw new Error('Entry not found offline and device is offline')
+      }
+      
       const firestore = getFirebaseFirestore()
       const entryRef = doc(firestore, 'entries', id)
       
@@ -169,7 +288,7 @@ export class EntryService {
         throw new Error('Unauthorized access to entry')
       }
 
-      // Update the entry
+      // Update the entry online
       const updatedData = {
         ...updateData,
         updated_at: new Date().toISOString()
@@ -177,19 +296,24 @@ export class EntryService {
       
       await updateDoc(entryRef, updatedData)
       
-      // Return the updated entry
-      return {
+      const updatedEntry = {
         id,
         ...existingData,
         ...updatedData
       } as Entry
+      
+      // Cache in offline storage
+      await OfflineStorageService.storeEntry(updatedEntry)
+      await OfflineStorageService.markAsSynced(`local_${id}`, id)
+      
+      return updatedEntry
     } catch (error) {
       console.error('Failed to update entry:', error)
       throw error
     }
   }
 
-  // Delete an entry
+  // Delete an entry (with offline support)
   static async deleteEntry(id: string): Promise<void> {
     try {
       const auth = getFirebaseAuth()
@@ -198,6 +322,40 @@ export class EntryService {
         throw new Error('User not authenticated')
       }
 
+      // Check offline storage first
+      const offlineEntry = await OfflineStorageService.getEntry(id)
+      
+      if (offlineEntry) {
+        // Delete from offline storage
+        await OfflineStorageService.deleteEntry(offlineEntry.localId)
+        
+        // Try online deletion if connected and entry is synced
+        if (navigator.onLine && offlineEntry.id) {
+          try {
+            const firestore = getFirebaseFirestore()
+            const entryRef = doc(firestore, 'entries', offlineEntry.id)
+            
+            // Verify entry exists and belongs to user
+            const entrySnap = await getDoc(entryRef)
+            if (entrySnap.exists()) {
+              const entryData = entrySnap.data()
+              if (entryData.user_id === user.uid) {
+                await deleteDoc(entryRef)
+              }
+            }
+          } catch (onlineError) {
+            console.warn('Online deletion failed, but offline deletion completed:', onlineError)
+          }
+        }
+        
+        return
+      }
+      
+      // Entry not in offline storage, try online deletion
+      if (!navigator.onLine) {
+        throw new Error('Entry not found offline and device is offline')
+      }
+      
       const firestore = getFirebaseFirestore()
       const entryRef = doc(firestore, 'entries', id)
       
@@ -219,8 +377,8 @@ export class EntryService {
     }
   }
 
-  // Search entries by content
-  static async searchEntries(query: string): Promise<Entry[]> {
+  // Search entries by content (with offline support)
+  static async searchEntries(query: string): Promise<(Entry | OfflineEntry)[]> {
     try {
       const auth = getFirebaseAuth()
       const user = auth.currentUser
@@ -228,21 +386,131 @@ export class EntryService {
         throw new Error('User not authenticated')
       }
 
-      // For now, get all entries and filter client-side
-      // TODO: Implement full-text search with Firebase extensions or Algolia
-      const entries = await this.getEntries()
+      // Always search offline first (includes cached online entries)
+      const offlineResults = await OfflineStorageService.searchEntries(user.uid, query)
       
-      const searchQuery = query.toLowerCase()
-      return entries.filter(entry => 
-        entry.transcript.toLowerCase().includes(searchQuery) ||
-        entry.keywords?.some(keyword => keyword.toLowerCase().includes(searchQuery)) ||
-        entry.wins?.some(win => win.toLowerCase().includes(searchQuery)) ||
-        entry.regrets?.some(regret => regret.toLowerCase().includes(searchQuery)) ||
-        entry.tasks?.some(task => task.toLowerCase().includes(searchQuery))
+      // If online, also search online entries and merge results
+      if (navigator.onLine) {
+        try {
+          // Get all entries and filter client-side
+          // TODO: Implement full-text search with Firebase extensions or Algolia
+          const allEntries = await this.getEntries()
+          
+          const searchQuery = query.toLowerCase()
+          const onlineResults = allEntries.filter(entry => 
+            entry.transcript.toLowerCase().includes(searchQuery) ||
+            entry.keywords?.some(keyword => keyword.toLowerCase().includes(searchQuery)) ||
+            entry.wins?.some(win => win.toLowerCase().includes(searchQuery)) ||
+            entry.regrets?.some(regret => regret.toLowerCase().includes(searchQuery)) ||
+            entry.tasks?.some(task => task.toLowerCase().includes(searchQuery))
+          )
+          
+          // Merge results, avoiding duplicates
+          const mergedResults: (Entry | OfflineEntry)[] = [...offlineResults]
+          
+          for (const onlineEntry of onlineResults) {
+            const existsOffline = offlineResults.some(offlineEntry => 
+              offlineEntry.id === onlineEntry.id
+            )
+            
+            if (!existsOffline) {
+              mergedResults.push(onlineEntry)
+            }
+          }
+          
+          // Sort by date (newest first)
+          return mergedResults.sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )
+        } catch (error) {
+          console.warn('Online search failed, using offline results only:', error)
+        }
+      }
+      
+      // Return offline results if online search failed or offline
+      return offlineResults.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )
     } catch (error) {
       console.error('Failed to search entries:', error)
       throw error
+    }
+  }
+
+  /**
+   * Perform auto-sync to all available and connected integrations
+   * This respects disconnect state and only syncs to active integrations
+   */
+  private static async performAutoSync(entry: Entry): Promise<void> {
+    try {
+      // Check Google Sheets integration status
+      const googleSheetsAvailable = await GoogleSheetsService.isAvailable()
+      if (googleSheetsAvailable) {
+        GoogleSheetsService.autoSync(entry)
+          .catch(error => {
+            console.warn('Google Sheets auto-sync failed for entry', entry.id, ':', error)
+            // Continue with other integrations even if one fails
+          })
+      } else {
+        console.log('Google Sheets integration not available, skipping auto-sync for entry', entry.id)
+      }
+
+      // Check Notion integration status
+      const notionAvailable = await NotionService.isAvailable()
+      if (notionAvailable) {
+        NotionService.autoSync(entry)
+          .catch(error => {
+            console.warn('Notion auto-sync failed for entry', entry.id, ':', error)
+            // Continue even if Notion sync fails
+          })
+      } else {
+        console.log('Notion integration not available, skipping auto-sync for entry', entry.id)
+      }
+    } catch (error) {
+      console.error('Failed to perform auto-sync for entry', entry.id, ':', error)
+      // Don't throw - auto-sync failures shouldn't break entry creation
+    }
+  }
+
+  /**
+   * Manually retry sync for failed entries
+   */
+  static async retrySyncForEntry(entryId: string): Promise<void> {
+    try {
+      const entry = await this.getEntry(entryId)
+      await this.performAutoSync(entry)
+    } catch (error) {
+      console.error('Failed to retry sync for entry', entryId, ':', error)
+      throw error
+    }
+  }
+
+  /**
+   * Basic offline sentiment analysis
+   * This is a simplified version that will be replaced when synced online
+   */
+  private static async performOfflineSentimentAnalysis(localId: string, transcript: string): Promise<void> {
+    try {
+      // Simple keyword-based sentiment analysis
+      const positiveWords = ['good', 'great', 'happy', 'wonderful', 'amazing', 'excellent', 'fantastic', 'love', 'enjoy', 'success', 'win', 'achievement']
+      const negativeWords = ['bad', 'terrible', 'sad', 'awful', 'hate', 'frustrated', 'disappointed', 'fail', 'mistake', 'regret', 'problem', 'difficult']
+      
+      const words = transcript.toLowerCase().split(/\s+/)
+      let score = 0
+      
+      words.forEach(word => {
+        if (positiveWords.includes(word)) score += 1
+        if (negativeWords.includes(word)) score -= 1
+      })
+      
+      // Normalize to -1 to 1 scale
+      const normalizedScore = Math.max(-1, Math.min(1, score / Math.max(words.length / 10, 1)))
+      
+      await OfflineStorageService.updateEntry(localId, {
+        sentiment_score: normalizedScore
+      })
+    } catch (error) {
+      console.error('Offline sentiment analysis failed:', error)
     }
   }
 }

@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../domains/auth/hooks/useAuth'
 import { VoiceRecorder } from '../domains/journaling/components/VoiceRecorder'
+import { SyncStatusIndicator } from '../domains/journaling/components/SyncStatusIndicator'
 import { EntryService } from '../domains/journaling/services/entryService'
+import { SentimentService } from '../domains/journaling/services/sentimentService'
+import { SyncService } from '../domains/journaling/services/syncService'
 import type { Entry } from '../shared/types/entry'
+import type { OfflineEntry } from '../domains/journaling/services/offlineStorageService'
 
 export const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth()
@@ -11,7 +15,7 @@ export const Dashboard: React.FC = () => {
   const [text, setText] = useState('')
   const [isVoiceMode, setIsVoiceMode] = useState(false)
   const [voiceError, setVoiceError] = useState<string | null>(null)
-  const [entries, setEntries] = useState<Entry[]>([])
+  const [entries, setEntries] = useState<(Entry | OfflineEntry)[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -22,6 +26,15 @@ export const Dashboard: React.FC = () => {
       console.error('Sign out error:', error)
     }
   }
+
+  // Initialize sync service
+  useEffect(() => {
+    SyncService.initialize()
+    
+    return () => {
+      SyncService.destroy()
+    }
+  }, [])
 
   // Load entries on mount
   useEffect(() => {
@@ -44,32 +57,59 @@ export const Dashboard: React.FC = () => {
   }, [user])
 
   const handleSave = async () => {
-    if (!text.trim() || !user) return
+    console.log('🔄 handleSave called', { hasText: !!text.trim(), hasUser: !!user, text: text.substring(0, 50) })
+    
+    if (!text.trim()) {
+      console.warn('❌ No text to save')
+      setVoiceError('텍스트를 입력해주세요.')
+      return
+    }
+    
+    if (!user) {
+      console.warn('❌ No user authenticated')
+      setVoiceError('로그인이 필요합니다.')
+      return
+    }
     
     try {
+      console.log('📝 Starting entry creation...')
       setIsSaving(true)
       setVoiceError(null)
 
-      const newEntry = await EntryService.createEntry({
+      const entryData = {
         transcript: text,
         date: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-        // TODO: Add AI analysis for wins, regrets, tasks, keywords
         keywords: [],
         wins: [],
         regrets: [],
         tasks: []
-      })
+      }
+      
+      console.log('📦 Entry data prepared:', entryData)
+
+      const newEntry = await EntryService.createEntry(entryData)
+      console.log('✅ Entry created successfully:', newEntry)
 
       // Add to local state
-      setEntries(prev => [newEntry, ...prev])
+      setEntries(prev => {
+        console.log('📊 Adding to entries list, current count:', prev.length)
+        return [newEntry, ...prev]
+      })
+      
       setText('')
       setIsVoiceMode(false)
       
-      console.log('Entry saved successfully:', newEntry.id)
+      // Log entry ID (could be localId for offline entries)
+      const entryId = 'id' in newEntry ? newEntry.id : newEntry.localId
+      console.log('🎉 Entry saved successfully:', entryId)
+      
+      // Show success message
+      alert('일기가 성공적으로 저장되었습니다!')
     } catch (error) {
-      console.error('Failed to save entry:', error)
-      setVoiceError('Failed to save entry. Please try again.')
+      console.error('❌ Failed to save entry:', error)
+      setVoiceError(`저장 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
     } finally {
+      console.log('🏁 handleSave completed')
       setIsSaving(false)
     }
   }
@@ -88,7 +128,11 @@ export const Dashboard: React.FC = () => {
   const handleDeleteEntry = async (entryId: string) => {
     try {
       await EntryService.deleteEntry(entryId)
-      setEntries(prev => prev.filter(entry => entry.id !== entryId))
+      setEntries(prev => prev.filter(entry => {
+        // Handle both Entry and OfflineEntry types
+        const id = 'id' in entry ? entry.id : entry.localId
+        return id !== entryId
+      }))
       console.log('Entry deleted successfully:', entryId)
     } catch (error) {
       console.error('Failed to delete entry:', error)
@@ -97,46 +141,55 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      {/* Navigation Header */}
-      <nav className="bg-white backdrop-blur-sm bg-opacity-80 shadow-lg border-b border-white border-opacity-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-lg">V</span>
-                </div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                  Voice Journal
-                </h1>
+    <div className="min-h-screen relative">
+      {/* Modern Navigation Header */}
+      <nav className="glass-nav sticky top-0 z-50">
+        <div className="max-w-4xl mx-auto" style={{padding: '0 var(--spacing-lg)'}}>
+          <div className="flex justify-between items-center h-full">
+            <div className="flex items-center" style={{gap: 'var(--spacing-lg)'}}>
+              <div className="glass-card-strong relative overflow-hidden" style={{
+                width: 'var(--spacing-2xl)',
+                height: 'var(--spacing-2xl)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 to-purple-600 opacity-90"></div>
+                <svg className="text-white relative z-10" style={{width: '24px', height: '24px'}} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                </svg>
               </div>
             </div>
             
-            <div className="flex items-center space-x-6">
-              <div className="hidden sm:block">
-                <span className="text-sm font-medium text-gray-600">
-                  안녕하세요, {user?.email?.split('@')[0]}님
-                </span>
-              </div>
+            <div className="flex items-center" style={{gap: 'var(--spacing-md)'}}>
+              <span className="hidden sm:block" style={{
+                fontSize: 'var(--text-sm)', 
+                color: 'var(--color-neutral-600)',
+                fontWeight: 'var(--font-weight-medium)',
+                marginRight: 'var(--spacing-sm)'
+              }}>
+                {user?.email?.split('@')[0]}님
+              </span>
               <button
                 onClick={() => navigate('/settings')}
-                className="flex items-center space-x-1 px-3 py-2 text-gray-600 hover:text-indigo-600 transition-all duration-200 hover:bg-indigo-50 rounded-lg"
+                className="glass-card transition-all duration-400 hover:scale-105 touch-target"
+                style={{color: 'var(--color-neutral-600)'}}
+                aria-label="Settings"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <svg className="icon-button" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                <span className="hidden sm:inline">설정</span>
               </button>
               <button
                 onClick={handleSignOut}
-                className="flex items-center space-x-1 px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200 rounded-lg"
+                className="glass-card transition-all duration-400 hover:scale-105 touch-target"
+                style={{color: 'var(--color-neutral-600)'}}
+                aria-label="Sign out"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                <svg className="icon-button" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
                 </svg>
-                <span className="hidden sm:inline">로그아웃</span>
               </button>
             </div>
           </div>
@@ -144,41 +197,63 @@ export const Dashboard: React.FC = () => {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-8">
-          {/* Write Entry */}
-          <div className="bg-white backdrop-blur-sm bg-opacity-90 shadow-xl rounded-2xl p-8 border border-white border-opacity-20">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">일기 작성</h2>
-                <p className="text-gray-600">오늘의 이야기를 들려주세요</p>
+      <main className="max-w-3xl mx-auto" style={{padding: 'var(--spacing-2xl) var(--spacing-lg)'}}>
+        <div style={{display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4xl)'}}>
+          {/* Modern Write Entry */}
+          <div className="glass-card animate-slide-up" style={{padding: 'var(--spacing-4xl)'}}>
+            <div className="flex items-center justify-between" style={{marginBottom: 'var(--spacing-4xl)'}}>
+              <div className="flex items-center" style={{gap: 'var(--spacing-lg)'}}>
+                <div className="glass-card-strong relative overflow-hidden" style={{width: 'var(--spacing-3xl)', height: 'var(--spacing-3xl)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 to-purple-600 opacity-90"></div>
+                  <svg className="text-white relative z-10" style={{width: '20px', height: '20px'}} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                  </svg>
+                </div>
               </div>
               
-              {/* Input Mode Toggle */}
-              <div className="flex items-center bg-gray-100 rounded-xl p-1">
+              {/* Modern Input Mode Toggle */}
+              <div className="glass-card flex items-center" style={{padding: 'var(--spacing-xs)'}}>
                 <button
                   onClick={() => setIsVoiceMode(false)}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  className={`flex items-center transition-all duration-400 ${
                     !isVoiceMode 
-                      ? 'bg-white text-indigo-700 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-800'
+                      ? 'glass-button text-white transform scale-105' 
+                      : 'hover:bg-white hover:bg-opacity-10'
                   }`}
+                  style={{
+                    padding: `var(--spacing-md) var(--spacing-lg)`,
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: 'var(--text-sm)',
+                    gap: 'var(--spacing-md)',
+                    height: 'var(--spacing-2xl)',
+                    fontWeight: 'var(--font-weight-medium)',
+                    color: !isVoiceMode ? 'white' : 'var(--color-neutral-600)'
+                  }}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  <svg className="icon-standard" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
                   </svg>
-                  <span>텍스트</span>
+                  <span>타이핑</span>
                 </button>
                 <button
                   onClick={() => setIsVoiceMode(true)}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  className={`flex items-center transition-all duration-400 ${
                     isVoiceMode 
-                      ? 'bg-white text-indigo-700 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-800'
+                      ? 'glass-button text-white transform scale-105' 
+                      : 'hover:bg-white hover:bg-opacity-10'
                   }`}
+                  style={{
+                    padding: `var(--spacing-md) var(--spacing-lg)`,
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: 'var(--text-sm)',
+                    gap: 'var(--spacing-md)',
+                    height: 'var(--spacing-2xl)',
+                    fontWeight: 'var(--font-weight-medium)',
+                    color: isVoiceMode ? 'white' : 'var(--color-neutral-600)'
+                  }}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  <svg className="icon-standard" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
                   </svg>
                   <span>음성</span>
                 </button>
@@ -187,40 +262,53 @@ export const Dashboard: React.FC = () => {
 
             {/* Input Area */}
             {isVoiceMode ? (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {/* Voice Error Display */}
                 {voiceError && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
-                    <div className="flex items-center space-x-2">
-                      <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                      </svg>
-                      <p className="text-sm text-red-700 font-medium">{voiceError}</p>
+                  <div className="glass-card bg-red-50 bg-opacity-80 border-red-200 animate-slide-up" style={{padding: 'var(--spacing-md)'}}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center" style={{gap: 'var(--spacing-sm)'}}>
+                        <svg className="icon-standard text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                        <p className="text-red-700 font-medium" style={{fontSize: 'var(--text-sm)'}}>{voiceError}</p>
+                      </div>
+                      <button 
+                        onClick={() => setVoiceError(null)}
+                        className="text-red-500 hover:text-red-700 transition-colors hover:scale-110 transform"
+                        style={{padding: 'var(--spacing-xs)'}}
+                      >
+                        <svg className="icon-standard" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 )}
                 
                 {/* Voice Recorder */}
-                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-8">
+                <div className="glass-card bg-gradient-to-br from-purple-50 to-blue-50 bg-opacity-50 p-8 relative overflow-hidden">
+                  {/* Decorative elements */}
+                  <div className="absolute top-4 right-4 w-16 h-16 bg-white bg-opacity-10 rounded-full animate-float"></div>
+                  <div className="absolute bottom-4 left-4 w-12 h-12 bg-white bg-opacity-10 rounded-full animate-float" style={{animationDelay: '2s'}}></div>
+                  
                   <VoiceRecorder
                     onTranscriptReady={handleVoiceTranscript}
                     onError={handleVoiceError}
                     language="ko"
-                    className="flex flex-col items-center"
+                    className="flex flex-col items-center relative z-10"
                   />
                 </div>
                 
-                {/* Transcript Display/Edit */}
+                {/* Modern Transcript Display */}
                 {text && (
-                  <div className="space-y-3">
-                    <label className="block text-sm font-semibold text-gray-700">
-                      전사 텍스트 (수정 가능):
-                    </label>
+                  <div className="animate-slide-up" style={{display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)'}}>
                     <textarea
                       value={text}
                       onChange={(e) => setText(e.target.value)}
-                      placeholder="음성 전사 텍스트가 여기에 나타납니다..."
-                      className="w-full h-40 p-4 border-2 border-gray-200 rounded-xl bg-white focus:ring-4 focus:ring-indigo-200 focus:border-indigo-400 transition-all duration-200 resize-none"
+                      placeholder="전사된 내용을 여기서 수정할 수 있습니다..."
+                      className="w-full glass-input textarea outline-none"
+                      style={{padding: 'var(--spacing-lg)', fontSize: 'var(--text-base)'}}
                     />
                   </div>
                 )}
@@ -230,145 +318,308 @@ export const Dashboard: React.FC = () => {
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="오늘은 어떤 하루였나요? 당신의 이야기를 들려주세요..."
-                className="w-full h-40 p-4 border-2 border-gray-200 rounded-xl bg-white focus:ring-4 focus:ring-indigo-200 focus:border-indigo-400 transition-all duration-200 resize-none"
+                className="w-full glass-input textarea outline-none"
+                style={{padding: 'var(--spacing-lg)', fontSize: 'var(--text-base)'}}
               />
             )}
             
-            <div className="mt-6 flex justify-end">
+            <div className="flex justify-end" style={{marginTop: 'var(--spacing-2xl)'}}>
               <button
                 onClick={handleSave}
                 disabled={!text.trim() || isSaving}
-                className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-3 rounded-xl font-semibold hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center space-x-2 transition-all duration-200"
+                className="glass-button outline-none"
+                style={{padding: 'var(--spacing-lg) var(--spacing-2xl)'}}
               >
                 {isSaving ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>저장 중...</span>
+                    <svg className="icon-standard animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>저장 중</span>
                   </>
                 ) : (
                   <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
+                    <svg className="icon-standard" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
                     </svg>
-                    <span>일기 저장</span>
+                    <span>저장</span>
                   </>
                 )}
               </button>
             </div>
           </div>
 
-          {/* Previous Entries */}
-          <div className="bg-white backdrop-blur-sm bg-opacity-90 shadow-xl rounded-2xl border border-white border-opacity-20 overflow-hidden">
-            <div className="px-8 py-6 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-100">
+          {/* Modern Entries Section */}
+          <div className="glass-card overflow-hidden animate-slide-up" style={{animationDelay: '0.2s'}}>
+            <div className="border-b border-white border-opacity-15" style={{padding: 'var(--spacing-xl) var(--spacing-2xl)'}}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                <div className="flex items-center" style={{gap: 'var(--spacing-lg)'}}>
+                  <div className="glass-card-strong relative overflow-hidden" style={{width: 'var(--spacing-3xl)', height: 'var(--spacing-3xl)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 to-purple-600 opacity-90"></div>
+                    <svg className="text-white relative z-10" style={{width: '20px', height: '20px'}} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                     </svg>
                   </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900">나의 일기장</h2>
-                    <p className="text-sm text-gray-600">{entries.length}개의 기록</p>
-                  </div>
                 </div>
-                {entries.length > 0 && (
-                  <div className="text-sm text-gray-500">
-                    최신순 정렬
-                  </div>
-                )}
+                <div className="flex items-center" style={{gap: 'var(--spacing-lg)'}}>
+                  {/* Sync Status Indicator */}
+                  {user && (
+                    <div className="glass-card bg-opacity-60" style={{padding: 'var(--spacing-sm) var(--spacing-md)'}}>
+                      <SyncStatusIndicator userId={user.uid} />
+                    </div>
+                  )}
+                  {entries.length > 0 && (
+                    <div className="glass-card bg-opacity-60" style={{padding: 'var(--spacing-md) var(--spacing-lg)'}}>
+                      <span style={{
+                        fontSize: 'var(--text-sm)', 
+                        color: 'var(--color-neutral-600)',
+                        fontWeight: 'var(--font-weight-medium)'
+                      }}>
+                        {entries.length}개
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-white divide-opacity-20">
               {isLoading ? (
-                <div className="px-8 py-12 text-center">
-                  <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                  <p className="text-gray-600 font-medium">일기를 불러오는 중...</p>
+                <div className="text-center" style={{padding: 'var(--spacing-2xl) var(--spacing-xl)'}}>
+                  <div className="glass-card mx-auto animate-pulse-glow" style={{width: 'var(--spacing-3xl)', height: 'var(--spacing-3xl)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 'var(--spacing-lg)'}}>
+                    <div className="border-2 border-purple-500 border-t-transparent rounded-full animate-spin" style={{width: 'var(--spacing-lg)', height: 'var(--spacing-lg)'}}></div>
+                  </div>
+                  <p className="text-gray-700 font-medium" style={{fontSize: 'var(--text-base)'}}>일기를 불러오는 중...</p>
+                  <p className="text-gray-500" style={{fontSize: 'var(--text-sm)', marginTop: 'var(--spacing-sm)'}}>잠시만 기다려주세요</p>
                 </div>
               ) : entries.length === 0 ? (
-                <div className="px-8 py-16 text-center">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="text-center" style={{padding: 'var(--spacing-3xl) var(--spacing-xl)'}}>
+                  <div className="glass-card mx-auto relative overflow-hidden" style={{width: '80px', height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 'var(--spacing-lg)'}}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-400 to-blue-400 opacity-20"></div>
+                    <svg className="text-gray-600 relative z-10" style={{width: '32px', height: '32px'}} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">아직 작성된 일기가 없습니다</h3>
-                  <p className="text-gray-600">위에서 첫 번째 일기를 작성해보세요!</p>
+                  <h3 className="font-bold text-gradient" style={{fontSize: 'var(--text-2xl)', marginBottom: 'var(--spacing-md)'}}>아직 작성된 일기가 없습니다</h3>
+                  <p className="text-gray-600" style={{fontSize: 'var(--text-base)', marginBottom: 'var(--spacing-lg)'}}>위에서 첫 번째 일기를 작성해보세요!</p>
+                  <div className="glass-card bg-gradient-to-r from-purple-50 to-blue-50 bg-opacity-50 max-w-md mx-auto" style={{padding: 'var(--spacing-md)'}}>
+                    <p className="text-gray-700" style={{fontSize: 'var(--text-sm)'}}>팁: 음성이나 텍스트로 자유롭게 작성할 수 있어요!</p>
+                  </div>
                 </div>
               ) : (
-                entries.map((entry) => (
-                  <div key={entry.id} className="px-8 py-6 hover:bg-gray-50 transition-colors duration-150">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="flex flex-col">
-                          <h3 className="text-sm font-semibold text-gray-900">
-                            {new Date(entry.created_at).toLocaleDateString('ko-KR', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                              weekday: 'short'
-                            })}
-                          </h3>
-                          <p className="text-xs text-gray-500">
-                            {new Date(entry.created_at).toLocaleTimeString('ko-KR', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </p>
+                entries.map((entry, index) => {
+                  // Handle both Entry and OfflineEntry types
+                  const entryId = 'id' in entry ? entry.id : entry.localId
+                  const isOffline = !('id' in entry) || ('syncStatus' in entry && entry.syncStatus === 'pending')
+                  
+                  return (
+                    <div key={entryId} className="hover:bg-white hover:bg-opacity-20 transition-all duration-400 group animate-slide-up" style={{animationDelay: `${index * 0.1}s`, padding: 'var(--spacing-xl) var(--spacing-2xl)'}}>
+                      <div className="flex justify-between items-start" style={{marginBottom: 'var(--spacing-lg)'}}>
+                        <div className="flex items-center" style={{gap: 'var(--spacing-lg)'}}>
+                          <div className="glass-card-strong relative overflow-hidden flex-shrink-0" style={{width: 'var(--spacing-2xl)', height: 'var(--spacing-2xl)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                            <div className={`absolute inset-0 bg-gradient-to-br ${isOffline ? 'from-yellow-400 to-orange-500' : 'from-indigo-400 to-purple-500'} opacity-70`}></div>
+                            <svg className="text-white relative z-10" style={{width: '16px', height: '16px'}} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                              {isOffline ? (
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              ) : (
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                              )}
+                            </svg>
+                          </div>
+                          <div>
+                            <div className="flex items-center" style={{gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-xs)'}}>
+                              <h3 style={{
+                                fontSize: 'var(--text-base)', 
+                                fontWeight: 'var(--font-weight-semibold)',
+                                color: 'var(--color-neutral-800)'
+                              }}>
+                                {new Date(entry.created_at).toLocaleDateString('ko-KR', {
+                                  month: 'long',
+                                  day: 'numeric',
+                                  weekday: 'short'
+                                })}
+                              </h3>
+                              {isOffline && (
+                                <span className="glass-card bg-yellow-100 bg-opacity-80 text-yellow-800" style={{
+                                  padding: 'var(--spacing-xs) var(--spacing-sm)',
+                                  fontSize: 'var(--text-xs)',
+                                  fontWeight: 'var(--font-weight-medium)',
+                                  borderRadius: 'var(--radius-sm)'
+                                }}>
+                                  동기화 대기
+                                </span>
+                              )}
+                            </div>
+                            <p style={{
+                              fontSize: 'var(--text-sm)', 
+                              color: 'var(--color-neutral-500)',
+                              fontWeight: 'var(--font-weight-normal)'
+                            }}>
+                              {new Date(entry.created_at).toLocaleTimeString('ko-KR', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
                         </div>
-                        <span className="inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        <button
+                          onClick={() => handleDeleteEntry(entryId)}
+                          className="glass-card transition-all duration-400 opacity-0 group-hover:opacity-100 transform hover:scale-110 touch-target"
+                          style={{color: 'var(--color-neutral-400)'}}
+                          aria-label="Delete entry"
+                        >
+                          <svg className="icon-button" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                           </svg>
-                          <span>음성 일기</span>
-                        </span>
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleDeleteEntry(entry.id)}
-                        className="flex items-center space-x-1 px-3 py-1 text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-150 rounded-lg"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        <span className="text-sm">삭제</span>
-                      </button>
+                    <div className="glass-card bg-gray-50 bg-opacity-40" style={{padding: 'var(--spacing-lg)', marginLeft: 'var(--spacing-4xl)'}}>
+                      {/* Sentiment Score Display */}
+                      {entry.sentiment_score !== undefined && entry.sentiment_score !== 0.5 && (
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-white border-opacity-20">
+                          <div className="flex items-center" style={{gap: 'var(--spacing-md)'}}>
+                            <div 
+                              className="glass-card-strong" 
+                              style={{
+                                width: 'var(--spacing-lg)', 
+                                height: 'var(--spacing-lg)',
+                                backgroundColor: SentimentService.getSentimentColor(entry.sentiment_score),
+                                opacity: 0.8
+                              }}
+                            ></div>
+                            <span style={{
+                              fontSize: 'var(--text-sm)',
+                              fontWeight: 'var(--font-weight-medium)',
+                              color: 'var(--color-neutral-600)'
+                            }}>
+                              감정: {SentimentService.getSentimentDescription(entry.sentiment_score)}
+                            </span>
+                          </div>
+                          <div className="glass-card bg-white bg-opacity-30" style={{padding: 'var(--spacing-xs) var(--spacing-md)'}}>
+                            <span style={{
+                              fontSize: 'var(--text-xs)',
+                              color: 'var(--color-neutral-500)',
+                              fontWeight: 'var(--font-weight-medium)'
+                            }}>
+                              {Math.round(entry.sentiment_score * 100)}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <p className="leading-relaxed whitespace-pre-wrap" style={{
+                        fontSize: 'var(--text-base)', 
+                        color: 'var(--color-neutral-700)',
+                        fontWeight: 'var(--font-weight-normal)',
+                        lineHeight: '1.7'
+                      }}>
+                        {entry.transcript}
+                      </p>
                     </div>
-                    <p className="text-gray-700 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-lg p-4">{entry.transcript}</p>
                     
-                    {/* Display extracted data if available */}
+                    {/* AI Analysis Results Display */}
                     {(entry.wins?.length || entry.regrets?.length || entry.tasks?.length || entry.keywords?.length) && (
-                      <div className="mt-3 pt-3 border-t border-gray-100">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      <div className="mt-4 pt-4 border-t border-white border-opacity-20" style={{marginLeft: 'var(--spacing-4xl)'}}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {entry.wins && entry.wins.length > 0 && (
-                            <div>
-                              <span className="font-medium text-green-700">✅ Wins:</span>
-                              <ul className="list-disc list-inside text-green-600 ml-2">
-                                {entry.wins.map((win, i) => <li key={i}>{win}</li>)}
-                              </ul>
+                            <div className="glass-card bg-green-50 bg-opacity-30" style={{padding: 'var(--spacing-md)'}}>
+                              <div className="flex items-center mb-2" style={{gap: 'var(--spacing-sm)'}}>
+                                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                <span style={{
+                                  fontSize: 'var(--text-sm)',
+                                  fontWeight: 'var(--font-weight-semibold)',
+                                  color: 'var(--color-neutral-700)'
+                                }}>
+                                  성과
+                                </span>
+                              </div>
+                              {entry.wins.map((win, i) => (
+                                <div key={i} className="glass-card bg-white bg-opacity-40 mb-2" style={{padding: 'var(--spacing-sm)'}}>
+                                  <p style={{
+                                    fontSize: 'var(--text-xs)',
+                                    color: 'var(--color-neutral-600)',
+                                    lineHeight: '1.4'
+                                  }}>
+                                    {win}
+                                  </p>
+                                </div>
+                              ))}
                             </div>
                           )}
+                          
                           {entry.regrets && entry.regrets.length > 0 && (
-                            <div>
-                              <span className="font-medium text-orange-700">🔄 Regrets:</span>
-                              <ul className="list-disc list-inside text-orange-600 ml-2">
-                                {entry.regrets.map((regret, i) => <li key={i}>{regret}</li>)}
-                              </ul>
+                            <div className="glass-card bg-orange-50 bg-opacity-30" style={{padding: 'var(--spacing-md)'}}>
+                              <div className="flex items-center mb-2" style={{gap: 'var(--spacing-sm)'}}>
+                                <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                                <span style={{
+                                  fontSize: 'var(--text-sm)',
+                                  fontWeight: 'var(--font-weight-semibold)',
+                                  color: 'var(--color-neutral-700)'
+                                }}>
+                                  아쉬운 점
+                                </span>
+                              </div>
+                              {entry.regrets.map((regret, i) => (
+                                <div key={i} className="glass-card bg-white bg-opacity-40 mb-2" style={{padding: 'var(--spacing-sm)'}}>
+                                  <p style={{
+                                    fontSize: 'var(--text-xs)',
+                                    color: 'var(--color-neutral-600)',
+                                    lineHeight: '1.4'
+                                  }}>
+                                    {regret}
+                                  </p>
+                                </div>
+                              ))}
                             </div>
                           )}
+                          
                           {entry.tasks && entry.tasks.length > 0 && (
-                            <div>
-                              <span className="font-medium text-blue-700">📝 Tasks:</span>
-                              <ul className="list-disc list-inside text-blue-600 ml-2">
-                                {entry.tasks.map((task, i) => <li key={i}>{task}</li>)}
-                              </ul>
+                            <div className="glass-card bg-blue-50 bg-opacity-30" style={{padding: 'var(--spacing-md)'}}>
+                              <div className="flex items-center mb-2" style={{gap: 'var(--spacing-sm)'}}>
+                                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                                <span style={{
+                                  fontSize: 'var(--text-sm)',
+                                  fontWeight: 'var(--font-weight-semibold)',
+                                  color: 'var(--color-neutral-700)'
+                                }}>
+                                  할 일
+                                </span>
+                              </div>
+                              {entry.tasks.map((task, i) => (
+                                <div key={i} className="glass-card bg-white bg-opacity-40 mb-2" style={{padding: 'var(--spacing-sm)'}}>
+                                  <p style={{
+                                    fontSize: 'var(--text-xs)',
+                                    color: 'var(--color-neutral-600)',
+                                    lineHeight: '1.4'
+                                  }}>
+                                    {task}
+                                  </p>
+                                </div>
+                              ))}
                             </div>
                           )}
+                          
                           {entry.keywords && entry.keywords.length > 0 && (
-                            <div>
-                              <span className="font-medium text-purple-700">🏷️ Keywords:</span>
-                              <div className="flex flex-wrap gap-1 mt-1">
+                            <div className="glass-card bg-purple-50 bg-opacity-30" style={{padding: 'var(--spacing-md)'}}>
+                              <div className="flex items-center mb-2" style={{gap: 'var(--spacing-sm)'}}>
+                                <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                                <span style={{
+                                  fontSize: 'var(--text-sm)',
+                                  fontWeight: 'var(--font-weight-semibold)',
+                                  color: 'var(--color-neutral-700)'
+                                }}>
+                                  키워드
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
                                 {entry.keywords.map((keyword, i) => (
-                                  <span key={i} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                  <span key={i} className="glass-card bg-white bg-opacity-60 inline-flex items-center" style={{
+                                    padding: 'var(--spacing-xs) var(--spacing-sm)',
+                                    fontSize: 'var(--text-xs)',
+                                    fontWeight: 'var(--font-weight-medium)',
+                                    color: 'var(--color-neutral-600)',
+                                    borderRadius: 'var(--radius-sm)'
+                                  }}>
                                     {keyword}
                                   </span>
                                 ))}
@@ -378,64 +629,13 @@ export const Dashboard: React.FC = () => {
                         </div>
                       </div>
                     )}
-                  </div>
-                ))
+                    </div>
+                  )
+                })
               )}
             </div>
           </div>
 
-          {/* Feature Status */}
-          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-8 shadow-lg">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-emerald-900">시스템 상태</h3>
-                <p className="text-sm text-emerald-700">모든 기능이 정상 작동 중입니다</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2 text-emerald-800">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                  <span><strong>인증:</strong> Firebase Auth + Google OAuth</span>
-                </div>
-                <div className="flex items-center space-x-2 text-emerald-800">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                  <span><strong>음성 녹음:</strong> 원터치 녹음 인터페이스</span>
-                </div>
-                <div className="flex items-center space-x-2 text-emerald-800">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                  <span><strong>음성 인식:</strong> 실시간 텍스트 변환</span>
-                </div>
-                <div className="flex items-center space-x-2 text-emerald-800">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                  <span><strong>데이터 저장:</strong> Firestore 데이터베이스</span>
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2 text-emerald-800">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                  <span><strong>감사 로그:</strong> Cloud Functions 변경 추적</span>
-                </div>
-                <div className="flex items-center space-x-2 text-orange-700">
-                  <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
-                  <span><strong>AI 분석:</strong> OpenAI 연동 예정</span>
-                </div>
-                <div className="flex items-center space-x-2 text-orange-700">
-                  <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
-                  <span><strong>연동 기능:</strong> Google Sheets, Notion 예정</span>
-                </div>
-                <div className="flex items-center space-x-2 text-emerald-800">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                  <span><strong>PWA 지원:</strong> 오프라인 사용 가능</span>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </main>
     </div>

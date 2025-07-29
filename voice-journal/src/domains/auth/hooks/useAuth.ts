@@ -6,6 +6,7 @@ import {
   signOut as firebaseSignOut,
   signInWithPopup,
   GoogleAuthProvider,
+  OAuthProvider,
   onAuthStateChanged
 } from 'firebase/auth'
 import { getFirebaseAuth } from '../../../lib/firebase'
@@ -48,7 +49,7 @@ export const useAuth = () => {
     })
 
     return () => unsubscribe()
-  }, [auth])
+  }, [])
 
   // Sign in with email and password
   const signIn = async (email: string, password: string): Promise<AuthUser> => {
@@ -109,6 +110,28 @@ export const useAuth = () => {
     }
   }
 
+  // Sign in with Apple
+  const signInWithApple = async (): Promise<AuthUser> => {
+    setIsSigningIn(true)
+    try {
+      const provider = new OAuthProvider('apple.com')
+      provider.addScope('email')
+      provider.addScope('name')
+      
+      const result = await signInWithPopup(auth, provider)
+      const authUser = convertUser(result.user)
+      if (!authUser) {
+        throw new Error('Failed to get user data after Apple sign in')
+      }
+      return authUser
+    } catch (error) {
+      console.error('Apple sign in error:', error)
+      throw error
+    } finally {
+      setIsSigningIn(false)
+    }
+  }
+
   // Sign out
   const signOut = async (): Promise<void> => {
     setIsSigningOut(true)
@@ -130,6 +153,7 @@ export const useAuth = () => {
     signUp,
     signOut,
     signInWithGoogle,
+    signInWithApple,
     isSigningIn,
     isSigningUp,
     isSigningOut,

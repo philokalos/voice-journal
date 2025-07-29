@@ -46,18 +46,27 @@ function checkFile(filePath) {
     }
   });
 
-  // Check for non-VITE env vars
-  ENV_PATTERNS.forEach((pattern, index) => {
-    const matches = content.match(pattern);
-    if (matches) {
-      violations.push({
-        type: 'ENV_EXPOSURE',
-        pattern: pattern.toString(),
-        matches: matches.slice(0, 3),
-        file: filePath
-      });
-    }
-  });
+  // Check for non-VITE env vars (but skip server-side code)
+  const isServerSide = filePath.includes('/functions/') || 
+                      filePath.includes('/scripts/migration/') ||
+                      filePath.includes('/scripts/test-') ||
+                      filePath.includes('migrate.js') ||
+                      filePath.includes('validate.js') ||
+                      filePath.includes('test-config.js');
+
+  if (!isServerSide) {
+    ENV_PATTERNS.forEach((pattern, index) => {
+      const matches = content.match(pattern);
+      if (matches) {
+        violations.push({
+          type: 'ENV_EXPOSURE',
+          pattern: pattern.toString(),
+          matches: matches.slice(0, 3),
+          file: filePath
+        });
+      }
+    });
+  }
 
   return violations;
 }
