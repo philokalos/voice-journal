@@ -4,6 +4,7 @@ import { useAuth } from '../domains/auth/hooks/useAuth'
 import { DataPrivacyService } from '../domains/auth/services/dataPrivacyService'
 import { GoogleSheetsService, GoogleSheetsStatus } from '../domains/integrations/services/googleSheetsService'
 import { NotionService, NotionStatus } from '../domains/integrations/services/notionService'
+import { resetOnboardingStatus } from '../utils/onboarding'
 // import { SyncStatusManager } from '../domains/integrations/utils/syncStatusManager' // TODO: Implement sync status
 
 export const Settings: React.FC = () => {
@@ -113,6 +114,11 @@ export const Settings: React.FC = () => {
     } catch (error) {
       console.error('Failed to disconnect Notion:', error)
     }
+  }
+
+  const handleResetOnboarding = () => {
+    resetOnboardingStatus()
+    alert('온보딩이 초기화되었습니다. 다음에 앱을 방문할 때 온보딩이 다시 표시됩니다.')
   }
 
   useEffect(() => {
@@ -396,7 +402,27 @@ export const Settings: React.FC = () => {
             </div>
           </div>
 
-          {/* Danger Zone */}
+          {/* Development Tools - Only in development */}
+          {import.meta.env.DEV && (
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-medium text-gray-900">개발 도구</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  개발 및 테스트를 위한 도구들입니다.
+                </p>
+              </div>
+              <div className="px-6 py-4">
+                <button
+                  onClick={handleResetOnboarding}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  온보딩 초기화
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Account Actions */}
           <div className="bg-white shadow rounded-lg">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-medium text-red-900">Account Actions</h2>

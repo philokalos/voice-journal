@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { QueryProvider } from './providers/QueryProvider'
 import { AuthGuard } from './components/AuthGuard'
+import { OnboardingTutorial } from './components/OnboardingTutorial'
 import { Dashboard } from './pages/Dashboard'
 import { Settings } from './pages/Settings'
 import { GoogleCallback } from './pages/oauth/GoogleCallback'
@@ -14,6 +15,13 @@ function App() {
           {/* OAuth Callback Routes - No AuthGuard needed */}
           <Route path="/oauth/google/callback" element={<GoogleCallback />} />
           <Route path="/oauth/notion/callback" element={<NotionCallback />} />
+          
+          {/* Onboarding Route - Protected */}
+          <Route path="/onboarding" element={
+            <AuthGuard>
+              <OnboardingTutorial />
+            </AuthGuard>
+          } />
           
           {/* Protected Routes */}
           <Route path="/settings" element={

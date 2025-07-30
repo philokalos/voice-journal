@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../domains/auth/hooks/useAuth'
+import { shouldShowOnboarding } from '../utils/onboarding'
 import { VoiceRecorder } from '../domains/journaling/components/VoiceRecorder'
 import { SyncStatusIndicator } from '../domains/journaling/components/SyncStatusIndicator'
 import { EntryService } from '../domains/journaling/services/entryService'
@@ -35,6 +36,13 @@ export const Dashboard: React.FC = () => {
       SyncService.destroy()
     }
   }, [])
+
+  // Check for onboarding completion
+  useEffect(() => {
+    if (user && shouldShowOnboarding()) {
+      navigate('/onboarding')
+    }
+  }, [user, navigate])
 
   // Load entries on mount
   useEffect(() => {
