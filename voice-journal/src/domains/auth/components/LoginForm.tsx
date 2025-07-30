@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { Button, Input, Card, Icon, Badge } from '../../../design-system'
 
 interface LoginFormProps {
   onSuccess?: () => void
@@ -69,9 +70,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
         <div className="absolute bottom-20 right-10 w-20 h-20 bg-white bg-opacity-10 rounded-full animate-float" style={{animationDelay: '1s'}}></div>
       </div>
       
-      <div className={`w-full max-w-sm mx-auto glass-card p-8 animate-slide-up relative z-10 ${
-        mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5'
-      }`}>
+      <Card
+        variant="glass"
+        padding="xl"
+        className={`w-full max-w-sm mx-auto animate-slide-up relative z-10 ${
+          mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5'
+        }`}
+      >
         {/* Modern Logo Section */}
         <div className="text-center" style={{marginBottom: 'var(--spacing-4xl)'}}>
           <div className="glass-card-strong mx-auto relative overflow-hidden" style={{
@@ -98,90 +103,95 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
         <form onSubmit={handleSubmit} style={{marginTop: 'var(--spacing-3xl)'}}>
           <div style={{marginBottom: 'var(--spacing-lg)'}}>
             <div style={{marginBottom: 'var(--spacing-xl)'}}>
-              <input
+              <Input
                 type="email"
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="이메일 주소"
-                className="w-full glass-input outline-none"
-                style={{padding: 'var(--spacing-lg)'}}
                 required
                 disabled={isLoading}
+                icon={
+                  <Icon size="sm">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75z" />
+                  </Icon>
+                }
               />
             </div>
 
             <div>
-              <input
+              <Input
                 type="password"
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="비밀번호"
-                className="w-full glass-input outline-none"
-                style={{padding: 'var(--spacing-lg)'}}
                 required
                 disabled={isLoading}
                 minLength={6}
+                icon={
+                  <Icon size="sm">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                  </Icon>
+                }
               />
             </div>
           </div>
 
           {error && (
-            <div className="glass-card bg-red-50 border-red-200 animate-slide-up" style={{padding: 'var(--spacing-lg)', marginBottom: 'var(--spacing-xl)', background: 'rgba(239, 68, 68, 0.1)'}}>
+            <Card
+              variant="glass"
+              padding="md"
+              className="animate-slide-up"
+              style={{
+                marginBottom: 'var(--spacing-xl)',
+                background: 'rgba(239, 68, 68, 0.1)',
+                borderColor: 'rgba(239, 68, 68, 0.3)'
+              }}
+            >
               <div className="flex items-center" style={{gap: 'var(--spacing-md)'}}>
-                <svg className="icon-standard" style={{color: '#ef4444'}} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                <Icon size="sm" style={{color: '#ef4444'}}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12V16.5z" />
-                </svg>
+                </Icon>
                 <span style={{fontSize: 'var(--text-sm)', color: '#dc2626', fontWeight: 'var(--font-weight-medium)'}}>{error}</span>
               </div>
-            </div>
+            </Card>
           )}
 
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            size="md"
+            fullWidth
+            loading={isLoading}
             disabled={isLoading}
-            className="w-full glass-button outline-none"
-            style={{padding: 'var(--spacing-lg)'}}
-          >
-            {isLoading ? (
-              <>
-                <svg className="icon-standard animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span>잠시만요...</span>
-              </>
-            ) : (
-              <>
-                <svg className="icon-standard" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+            icon={
+              !isLoading ? (
+                <Icon size="sm">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-                </svg>
-                <span>{isSignUp ? '계정 만들기' : '로그인'}</span>
-              </>
-            )}
-          </button>
+                </Icon>
+              ) : undefined
+            }
+          >
+            {isLoading ? '잠시만요...' : (isSignUp ? '계정 만들기' : '로그인')}
+          </Button>
         </form>
 
         <div className="text-center" style={{marginTop: 'var(--spacing-xl)'}}>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setIsSignUp(!isSignUp)}
-            className="text-gray-600 hover:text-gradient transition-all duration-300 hover:transform hover:scale-105"
-            style={{
-              fontSize: 'var(--text-sm)', 
-              padding: 'var(--spacing-md)',
-              fontWeight: 'var(--font-weight-medium)'
-            }}
             disabled={isLoading}
+            className="text-gray-600 hover:text-gradient transition-all duration-300"
           >
             {isSignUp 
               ? '이미 계정이 있나요?' 
               : '처음 방문이신가요?'
             }
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }

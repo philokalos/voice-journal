@@ -8,6 +8,7 @@ import { MobileBottomNav } from '../components/MobileBottomNav'
 import { SwipeableEntryCard } from '../components/SwipeableEntryCard'
 import { EntryService } from '../domains/journaling/services/entryService'
 import { SyncService } from '../domains/journaling/services/syncService'
+import { Button, Input, Card, Icon, Badge } from '../design-system'
 import type { Entry } from '../shared/types/entry'
 import type { OfflineEntry } from '../domains/journaling/services/offlineStorageService'
 
@@ -331,50 +332,47 @@ export const Dashboard: React.FC = () => {
                 {/* Modern Transcript Display */}
                 {text && (
                   <div className="animate-slide-up" style={{display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)'}}>
-                    <textarea
+                    <Input
                       value={text}
                       onChange={(e) => setText(e.target.value)}
                       placeholder="전사된 내용을 여기서 수정할 수 있습니다..."
-                      className="w-full glass-input textarea outline-none"
-                      style={{padding: 'var(--spacing-lg)', fontSize: 'var(--text-base)'}}
+                      multiline
+                      rows={4}
+                      variant="glass"
+                      size="md"
                     />
                   </div>
                 )}
               </div>
             ) : (
-              <textarea
+              <Input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="오늘은 어떤 하루였나요? 당신의 이야기를 들려주세요..."
-                className="w-full glass-input textarea outline-none"
-                style={{padding: 'var(--spacing-lg)', fontSize: 'var(--text-base)'}}
+                multiline
+                rows={5}
+                variant="glass"
+                size="md"
               />
             )}
             
             <div className="flex justify-end" style={{marginTop: 'var(--spacing-2xl)'}}>
-              <button
+              <Button
+                variant="primary"
+                size="md"
                 onClick={handleSave}
                 disabled={!text.trim() || isSaving}
-                className="glass-button outline-none"
-                style={{padding: 'var(--spacing-lg) var(--spacing-2xl)'}}
-              >
-                {isSaving ? (
-                  <>
-                    <svg className="icon-standard animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>저장 중</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="icon-standard" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                loading={isSaving}
+                icon={
+                  !isSaving ? (
+                    <Icon size="sm">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
-                    </svg>
-                    <span>저장</span>
-                  </>
-                )}
-              </button>
+                    </Icon>
+                  ) : undefined
+                }
+              >
+                {isSaving ? '저장 중' : '저장'}
+              </Button>
             </div>
           </div>
 
