@@ -389,7 +389,7 @@ export class SyncService {
    * Schedule periodic sync (every 5 minutes when online)
    */
   private static schedulePeriodicSync(): void {
-    const syncInterval = 5 * 60 * 1000 // 5 minutes
+    const syncInterval = 30 * 1000 // 30 seconds
     
     const periodicSync = () => {
       if (this.isOnline && !this.syncInProgress) {

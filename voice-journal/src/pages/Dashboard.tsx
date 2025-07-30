@@ -45,6 +45,14 @@ export const Dashboard: React.FC = () => {
         setIsLoading(true)
         const userEntries = await EntryService.getEntries()
         setEntries(userEntries)
+        
+        // Trigger immediate sync on load if online
+        if (navigator.onLine) {
+          console.log('🔄 Triggering initial sync on dashboard load')
+          SyncService.sync().catch(error => {
+            console.warn('Initial sync failed:', error)
+          })
+        }
       } catch (error) {
         console.error('Failed to load entries:', error)
         setVoiceError('Failed to load entries. Please refresh the page.')
@@ -102,6 +110,14 @@ export const Dashboard: React.FC = () => {
       // Log entry ID (could be localId for offline entries)
       const entryId = 'id' in newEntry ? newEntry.id : newEntry.localId
       console.log('🎉 Entry saved successfully:', entryId)
+      
+      // Trigger immediate sync if online
+      if (navigator.onLine) {
+        console.log('🔄 Triggering immediate sync after entry creation')
+        SyncService.sync().catch(error => {
+          console.warn('Post-save sync failed:', error)
+        })
+      }
       
       // Show success message
       alert('일기가 성공적으로 저장되었습니다!')
