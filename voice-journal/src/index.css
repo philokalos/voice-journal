@@ -274,14 +274,82 @@
       --text-xl: 19px;
       --text-2xl: 22px;
       --text-3xl: 26px;
+      
+      /* Mobile-specific button and input sizes */
+      --button-height: 52px;
+      --input-height: 52px;
     }
 
     .glass-card {
       border-radius: var(--radius-lg);
+      /* Add more padding on mobile for better touch experience */
+      padding: var(--spacing-lg);
     }
 
     .glass-input.textarea {
-      min-height: 100px;
+      min-height: 120px;
+      padding: var(--spacing-lg);
+    }
+
+    .glass-button {
+      height: var(--button-height);
+      padding: 0 var(--spacing-xl);
+      font-size: var(--text-base);
+      /* Increase touch target on mobile */
+      min-height: 52px;
+    }
+
+    /* Mobile-specific voice recorder adjustments */
+    .voice-recorder button {
+      width: 90px;
+      height: 90px;
+    }
+
+    /* Improve spacing for mobile cards */
+    .glass-card:not(.glass-nav) {
+      margin: var(--spacing-md);
+    }
+
+    /* Mobile-friendly navigation header */
+    .glass-nav {
+      height: 60px;
+      padding: 0 var(--spacing-md);
+    }
+
+    /* Ensure proper safe area handling */
+    body {
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+  }
+
+  /* Extra small devices (phones in portrait) */
+  @media (max-width: 475px) {
+    :root {
+      --spacing-md: 12px;
+      --spacing-lg: 20px;
+      --spacing-xl: 28px;
+      --spacing-2xl: 36px;
+      --spacing-3xl: 44px;
+      --spacing-4xl: 64px;
+    }
+
+    .glass-card {
+      margin: var(--spacing-sm);
+      padding: var(--spacing-md);
+    }
+
+    /* Smaller voice recorder on very small screens */
+    .voice-recorder button {
+      width: 80px;
+      height: 80px;
+    }
+  }
+
+  /* Tablet breakpoint */
+  @media (min-width: 641px) and (max-width: 1024px) {
+    .glass-card {
+      /* Maintain desktop spacing on tablets */
+      padding: var(--spacing-xl);
     }
   }
 

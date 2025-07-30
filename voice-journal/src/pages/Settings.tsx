@@ -4,6 +4,7 @@ import { useAuth } from '../domains/auth/hooks/useAuth'
 import { DataPrivacyService } from '../domains/auth/services/dataPrivacyService'
 import { GoogleSheetsService, GoogleSheetsStatus } from '../domains/integrations/services/googleSheetsService'
 import { NotionService, NotionStatus } from '../domains/integrations/services/notionService'
+import { MobileBottomNav } from '../components/MobileBottomNav'
 import { resetOnboardingStatus } from '../utils/onboarding'
 // import { SyncStatusManager } from '../domains/integrations/utils/syncStatusManager' // TODO: Implement sync status
 
@@ -127,6 +128,9 @@ export const Settings: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav />
+      
       {/* Navigation Header */}
       <nav className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -157,7 +161,7 @@ export const Settings: React.FC = () => {
       </nav>
 
       {/* Settings Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24" style={{paddingBottom: 'calc(var(--spacing-2xl) + 80px + env(safe-area-inset-bottom, 0px))'}}>
         <div className="space-y-8">
           {/* Account Section */}
           <div className="bg-white shadow rounded-lg">
