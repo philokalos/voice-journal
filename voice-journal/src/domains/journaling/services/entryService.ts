@@ -77,10 +77,11 @@ export class EntryService {
           const offlineEntry = await OfflineStorageService.storeEntry(entryData)
           await OfflineStorageService.markAsSynced(offlineEntry.localId, docRef.id)
 
-          // Perform sentiment analysis asynchronously
-          SentimentService.analyzeSentiment(docRef.id, request.transcript)
+          // Perform sentiment analysis asynchronously with user-friendly error handling
+          this.performSentimentAnalysisWithFallback(docRef.id, request.transcript)
             .catch(error => {
               console.warn('Sentiment analysis failed for entry', docRef.id, ':', error)
+              // Note: Error is already handled in performSentimentAnalysisWithFallback
             })
 
           // Initialize sync status tracking
@@ -482,6 +483,38 @@ export class EntryService {
     } catch (error) {
       console.error('Failed to retry sync for entry', entryId, ':', error)
       throw error
+    }
+  }
+
+  /**
+   * Perform sentiment analysis with user-friendly error handling and retry logic
+   * @param entryId - The entry ID to analyze
+   * @param transcript - The transcript text to analyze
+   */
+  private static async performSentimentAnalysisWithFallback(entryId: string, transcript: string): Promise<void> {
+    try {
+      const analysis = await SentimentService.analyzeSentiment(entryId, transcript)
+      
+      // Update the entry with the analysis results
+      const firestore = getFirebaseFirestore()
+      const entryRef = doc(firestore, 'entries', entryId)
+      
+      await updateDoc(entryRef, {
+        sentiment_score: analysis.sentiment_score,
+        wins: analysis.wins,
+        regrets: analysis.regrets,
+        tasks: analysis.tasks,
+        keywords: analysis.keywords,
+        updated_at: new Date().toISOString()
+      })
+      
+      console.log(`Sentiment analysis completed for entry ${entryId}`)
+      
+    } catch (error) {
+      console.error(`Sentiment analysis failed for entry ${entryId}:`, error)
+      
+      // The SentimentService has already handled retries and provided fallback data
+      // No additional user action needed as the analysis will contain fallback values
     }
   }
 

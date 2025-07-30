@@ -1,5 +1,6 @@
 import { getFirebaseAuth, getFirebaseFunctions } from '../../../lib/firebase'
 import { httpsCallable } from 'firebase/functions'
+import { retryWithBackoff, isRetryableError } from '../../../utils/retry'
 
 export interface SentimentAnalysisResult {
   sentiment_score: number
@@ -17,29 +18,30 @@ export interface SentimentAnalysisResponse {
 
 export class SentimentService {
   /**
-   * Analyze sentiment of a journal entry
+   * Analyze sentiment of a journal entry with retry logic
    * @param entryId - The ID of the entry to analyze
    * @param transcript - The transcript text to analyze
    * @returns Promise with sentiment analysis results
    */
   static async analyzeSentiment(entryId: string, transcript: string): Promise<SentimentAnalysisResult> {
-    try {
-      const auth = getFirebaseAuth()
-      const user = auth.currentUser
-      if (!user) {
-        throw new Error('User not authenticated')
-      }
+    const auth = getFirebaseAuth()
+    const user = auth.currentUser
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
 
-      if (!transcript.trim()) {
-        throw new Error('Transcript is required for sentiment analysis')
-      }
+    if (!transcript.trim()) {
+      throw new Error('Transcript is required for sentiment analysis')
+    }
 
-      const functions = getFirebaseFunctions()
-      const analyzeSentimentFn = httpsCallable<
-        { entryId: string; transcript: string },
-        SentimentAnalysisResponse
-      >(functions, 'analyzeSentiment')
+    const functions = getFirebaseFunctions()
+    const analyzeSentimentFn = httpsCallable<
+      { entryId: string; transcript: string },
+      SentimentAnalysisResponse
+    >(functions, 'analyzeSentiment')
 
+    // Retry wrapper function
+    const performAnalysis = async (): Promise<SentimentAnalysisResult> => {
       const result = await analyzeSentimentFn({
         entryId,
         transcript: transcript.trim()
@@ -50,19 +52,43 @@ export class SentimentService {
       }
 
       return result.data.analysis
-    } catch (error) {
-      console.error('Sentiment analysis error:', error)
-      
-      // Return default analysis if the service fails
-      // This ensures the app continues to work even if AI analysis is unavailable
-      return {
-        sentiment_score: 0.5, // Neutral sentiment
-        sentiment_magnitude: 0,
-        wins: [],
-        regrets: [],
-        tasks: [],
-        keywords: this.extractBasicKeywords(transcript)
+    }
+
+    try {
+      const retryResult = await retryWithBackoff(performAnalysis, {
+        maxRetries: 3,
+        initialDelay: 1000,
+        maxDelay: 5000,
+        backoffMultiplier: 2,
+        onRetry: (error, attempt) => {
+          console.warn(`Sentiment analysis retry ${attempt}/3:`, error.message)
+          
+          // Log retry attempts for monitoring
+          this.logRetryAttempt(entryId, error, attempt)
+        }
+      })
+
+      if (retryResult.success && retryResult.data) {
+        // Log successful analysis after retries
+        if (retryResult.attempts > 1) {
+          console.info(`Sentiment analysis succeeded after ${retryResult.attempts} attempts for entry ${entryId}`)
+        }
+        
+        return retryResult.data
       }
+
+      // If retry failed, throw the last error to be caught below
+      throw retryResult.error || new Error('Sentiment analysis failed after retries')
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('Sentiment analysis error after retries:', errorMessage)
+      
+      // Log final failure for monitoring
+      this.logAnalysisFailure(entryId, error as Error)
+
+      // Return default analysis as fallback to ensure app continues working
+      return this.createFallbackAnalysis(transcript, errorMessage)
     }
   }
 
@@ -147,5 +173,62 @@ export class SentimentService {
         keywords: analysis.keywords.length > 0 ? analysis.keywords : ['키워드 없음']
       }
     }
+  }
+
+  /**
+   * Create fallback analysis when AI analysis fails
+   * @param transcript - The original transcript
+   * @param errorMessage - The error message for context
+   * @returns Fallback analysis result
+   */
+  private static createFallbackAnalysis(transcript: string, _errorMessage: string): SentimentAnalysisResult {
+    return {
+      sentiment_score: 0.5, // Neutral sentiment
+      sentiment_magnitude: 0,
+      wins: [],
+      regrets: [],
+      tasks: [],
+      keywords: this.extractBasicKeywords(transcript)
+    }
+  }
+
+  /**
+   * Log retry attempts for monitoring
+   * @param entryId - Entry ID being analyzed
+   * @param error - The error that triggered retry
+   * @param attempt - Current attempt number
+   */
+  private static logRetryAttempt(entryId: string, error: Error, attempt: number): void {
+    // In a production app, this would send to analytics/monitoring service
+    const logData = {
+      event: 'sentiment_analysis_retry',
+      entryId,
+      attempt,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+      retryable: isRetryableError(error)
+    }
+    
+    // For now, log to console. In production, send to monitoring service
+    console.warn('AI Analysis Retry:', logData)
+  }
+
+  /**
+   * Log final analysis failure for monitoring
+   * @param entryId - Entry ID that failed analysis
+   * @param error - Final error after all retries
+   */
+  private static logAnalysisFailure(entryId: string, error: Error): void {
+    // In a production app, this would send to analytics/monitoring service
+    const logData = {
+      event: 'sentiment_analysis_failed',
+      entryId,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+      fallback_used: true
+    }
+    
+    // For now, log to console. In production, send to monitoring service
+    console.error('AI Analysis Failed:', logData)
   }
 }
