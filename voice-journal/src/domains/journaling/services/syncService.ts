@@ -1,7 +1,7 @@
 import { getFirebaseAuth, getFirebaseFirestore } from '../../../lib/firebase'
-import { collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs } from 'firebase/firestore'
+import { collection, addDoc, doc, updateDoc, query, where, getDocs } from 'firebase/firestore'
 import { OfflineStorageService, OfflineEntry } from './offlineStorageService'
-import { EntryService } from './entryService'
+// import { EntryService } from './entryService' // TODO: Fix circular dependency
 import type { Entry } from '../../../shared/types/entry'
 
 export interface SyncProgress {

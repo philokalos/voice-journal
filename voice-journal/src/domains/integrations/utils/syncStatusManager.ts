@@ -50,11 +50,6 @@ export class SyncStatusManager {
         }
       })
 
-      const syncStatusUpdate: Partial<SyncStatusInfo> = {
-        [service]: serviceStatus,
-        last_updated: now
-      }
-
       await updateDoc(entryRef, {
         [`sync_status.${service}`]: serviceStatus,
         'sync_status.last_updated': now

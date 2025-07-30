@@ -126,7 +126,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
       setState(prev => ({ ...prev, error: errorMessage }))
       onError(errorMessage)
     }
-  }, [language, onError, initializeSpeechRecognition])
+  }, [onError, initializeSpeechRecognition])
 
   // Stop recording
   const stopRecording = useCallback(() => {

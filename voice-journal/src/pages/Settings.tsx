@@ -4,7 +4,7 @@ import { useAuth } from '../domains/auth/hooks/useAuth'
 import { DataPrivacyService } from '../domains/auth/services/dataPrivacyService'
 import { GoogleSheetsService, GoogleSheetsStatus } from '../domains/integrations/services/googleSheetsService'
 import { NotionService, NotionStatus } from '../domains/integrations/services/notionService'
-import { SyncStatusManager } from '../domains/integrations/utils/syncStatusManager'
+// import { SyncStatusManager } from '../domains/integrations/utils/syncStatusManager' // TODO: Implement sync status
 
 export const Settings: React.FC = () => {
   const { user, signOut } = useAuth()
@@ -86,24 +86,25 @@ export const Settings: React.FC = () => {
     }
   }
 
-  const handleNotionConnect = async () => {
-    try {
-      await NotionService.startOAuthFlow()
-      // Status will be updated when user returns from OAuth
-      setTimeout(() => loadIntegrationStatus(), 2000)
-    } catch (error) {
-      console.error('Failed to start Notion OAuth:', error)
-      
-      // Check for configuration error
-      if (error instanceof Error && error.message.includes('not configured')) {
-        alert('Notion 연동이 설정되지 않았습니다. 관리자에게 문의하세요.')
-      } else if (error instanceof Error && error.message.includes('popup')) {
-        alert('팝업이 차단되었습니다. 팝업을 허용하고 다시 시도해주세요.')
-      } else {
-        alert('Notion 연동에 실패했습니다. 다시 시도해주세요.')
-      }
-    }
-  }
+  // TODO: Re-enable when Notion integration is ready
+  // const handleNotionConnect = async () => {
+  //   try {
+  //     await NotionService.startOAuthFlow()
+  //     // Status will be updated when user returns from OAuth
+  //     setTimeout(() => loadIntegrationStatus(), 2000)
+  //   } catch (error) {
+  //     console.error('Failed to start Notion OAuth:', error)
+  //     
+  //     // Check for configuration error
+  //     if (error instanceof Error && error.message.includes('not configured')) {
+  //       alert('Notion 연동이 설정되지 않았습니다. 관리자에게 문의하세요.')
+  //     } else if (error instanceof Error && error.message.includes('popup')) {
+  //       alert('팝업이 차단되었습니다. 팝업을 허용하고 다시 시도해주세요.')
+  //     } else {
+  //       alert('Notion 연동에 실패했습니다. 다시 시도해주세요.')
+  //     }
+  //   }
+  // }
 
   const handleNotionDisconnect = async () => {
     try {

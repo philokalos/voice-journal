@@ -61,7 +61,12 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
       <div>
         <LoginForm />
         <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 w-full max-w-sm px-4">
-          <OAuthButton />
+          <OAuthButton 
+            onError={(errorMessage) => {
+              console.error('OAuth error in AuthGuard:', errorMessage)
+              alert(errorMessage) // 임시로 alert 사용, 나중에 토스트로 교체
+            }}
+          />
         </div>
       </div>
     )

@@ -1,7 +1,5 @@
 import React, { useState } from 'react'
 import { ConflictEntry, SyncService } from '../services/syncService'
-import type { Entry } from '../../../shared/types/entry'
-import { OfflineEntry } from '../services/offlineStorageService'
 
 interface ConflictResolutionProps {
   conflicts: ConflictEntry[]

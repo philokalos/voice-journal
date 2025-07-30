@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { SyncService, SyncStatus, SyncProgress, SyncResult, ConflictEntry } from '../services/syncService'
 import { ConflictResolution } from './ConflictResolution'
 
@@ -22,14 +22,14 @@ export const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null)
 
   // Update sync stats
-  const updateStats = async () => {
+  const updateStats = useCallback(async () => {
     try {
       const stats = await SyncService.getSyncStats(userId)
       setSyncStats(stats)
     } catch (error) {
       console.error('Failed to get sync stats:', error)
     }
-  }
+  }, [userId])
 
   useEffect(() => {
     // Set initial status
@@ -53,7 +53,7 @@ export const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
     return () => {
       SyncService.removeSyncListener(handleSyncStatusChange)
     }
-  }, [userId])
+  }, [userId, updateStats])
 
   const handleManualSync = async () => {
     try {

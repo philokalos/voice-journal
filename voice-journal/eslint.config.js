@@ -25,4 +25,11 @@ export default tseslint.config([
       'no-case-declarations': 'warn',
     },
   },
+  {
+    // Allow namespaces in Cypress support files
+    files: ['cypress/support/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-namespace': 'off',
+    },
+  },
 ])

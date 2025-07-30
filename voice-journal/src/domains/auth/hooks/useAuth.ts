@@ -5,6 +5,8 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   OAuthProvider,
   onAuthStateChanged
@@ -26,7 +28,7 @@ export const useAuth = () => {
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  let auth: any = null;
+  let auth: ReturnType<typeof getFirebaseAuth> | null = null;
   try {
     auth = getFirebaseAuth()
   } catch (firebaseError) {
@@ -46,7 +48,7 @@ export const useAuth = () => {
     }
   }
 
-  // Listen for auth state changes
+  // Listen for auth state changes and handle redirect results
   useEffect(() => {
     if (!auth) {
       setIsLoading(false)
@@ -54,6 +56,18 @@ export const useAuth = () => {
     }
     
     setIsLoading(true)
+    
+    // Check for redirect result first
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          console.log('✅ Google redirect sign in successful:', result.user.email)
+          setUser(convertUser(result.user))
+        }
+      })
+      .catch((error) => {
+        console.error('❌ Redirect result error:', error)
+      })
     
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(convertUser(firebaseUser))
@@ -101,21 +115,75 @@ export const useAuth = () => {
 
   // Sign in with Google
   const signInWithGoogle = async (): Promise<AuthUser> => {
+    if (!auth) {
+      throw new Error('Firebase Auth not available')
+    }
+    
     setIsSigningIn(true)
     try {
+      console.log('🔐 Initializing Google Auth Provider...')
       const provider = new GoogleAuthProvider()
       provider.setCustomParameters({
         prompt: 'select_account'
       })
       
-      const result = await signInWithPopup(auth, provider)
-      const authUser = convertUser(result.user)
-      if (!authUser) {
-        throw new Error('Failed to get user data after Google sign in')
+      // Add additional scopes for better compatibility
+      provider.addScope('email')
+      provider.addScope('profile')
+      
+      console.log('🔧 Provider configured with scopes:', provider.getScopes())
+      
+      console.log('🚀 Attempting Google popup sign in...')
+      console.log('🌍 Current origin:', window.location.origin)
+      console.log('🔐 Firebase auth domain:', auth.config.authDomain)
+      
+      try {
+        // Try popup first
+        const result = await signInWithPopup(auth, provider)
+        console.log('📋 Google sign in result:', {
+          user: result.user?.email,
+          uid: result.user?.uid,
+          displayName: result.user?.displayName
+        })
+        
+        const authUser = convertUser(result.user)
+        if (!authUser) {
+          throw new Error('Failed to get user data after Google sign in')
+        }
+        console.log('✅ Google popup sign in successful for:', authUser.email)
+        return authUser
+      } catch (popupError: unknown) {
+        const popupErr = popupError as { code?: string }
+        console.log('⚠️ Popup failed, trying redirect method...', popupErr?.code)
+        
+        // If popup is blocked or fails, fall back to redirect
+        if (popupErr?.code === 'auth/popup-blocked' || 
+            popupErr?.code === 'auth/popup-closed-by-user' ||
+            popupErr?.code === 'auth/cancelled-popup-request') {
+          
+          console.log('🔄 Using redirect method instead...')
+          await signInWithRedirect(auth, provider)
+          
+          // signInWithRedirect doesn't return immediately
+          // The result will be handled in the useEffect hook
+          // Return a promise that will resolve after redirect
+          return new Promise((resolve, reject) => {
+            // This will be resolved by the redirect handler
+            setTimeout(() => {
+              reject(new Error('Redirect sign in initiated - please wait'))
+            }, 1000)
+          })
+        } else {
+          throw popupError
+        }
       }
-      return authUser
-    } catch (error) {
-      console.error('Google sign in error:', error)
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string; name?: string }
+      console.error('❌ Google sign in error details:', {
+        code: err?.code,
+        message: err?.message,
+        name: err?.name
+      })
       throw error
     } finally {
       setIsSigningIn(false)

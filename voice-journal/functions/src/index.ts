@@ -2,6 +2,7 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { LanguageServiceClient } from "@google-cloud/language";
 import { google } from "googleapis";
+import * as crypto from "crypto";
 
 admin.initializeApp();
 
@@ -448,7 +449,7 @@ class TokenEncryptionService {
   }
 
   static encryptTokens(tokens: any): { encryptedData: string; iv: string; authTag: string } {
-    const crypto = require('crypto');
+    // crypto is imported at the top
     const key = Buffer.from(this.getEncryptionKey(), 'hex');
     const iv = crypto.randomBytes(this.IV_LENGTH);
     
@@ -468,7 +469,7 @@ class TokenEncryptionService {
   }
 
   static decryptTokens(encryptedToken: { encryptedData: string; iv: string; authTag: string }): any {
-    const crypto = require('crypto');
+    // crypto is imported at the top
     const key = Buffer.from(this.getEncryptionKey(), 'hex');
     const authTag = Buffer.from(encryptedToken.authTag, 'hex');
     

@@ -28,25 +28,28 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
     }
 
     try {
-      const result = isSignUp 
-        ? await signUp(email, password)
-        : await signIn(email, password)
+      if (isSignUp) {
+        await signUp(email, password)
+      } else {
+        await signIn(email, password)
+      }
 
       onSuccess?.()
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Auth error:', err)
+      const firebaseError = err as { code?: string }
       
-      if (err?.code === 'auth/email-already-in-use') {
+      if (firebaseError?.code === 'auth/email-already-in-use') {
         setError('이미 등록된 이메일입니다. 로그인을 시도해주세요.')
         setIsSignUp(false)
-      } else if (err?.code === 'auth/user-not-found') {
+      } else if (firebaseError?.code === 'auth/user-not-found') {
         setError('등록되지 않은 이메일입니다. 회원가입을 진행해주세요.')
         setIsSignUp(true)
-      } else if (err?.code === 'auth/wrong-password') {
+      } else if (firebaseError?.code === 'auth/wrong-password') {
         setError('비밀번호가 올바르지 않습니다.')
-      } else if (err?.code === 'auth/weak-password') {
+      } else if (firebaseError?.code === 'auth/weak-password') {
         setError('비밀번호는 6자 이상이어야 합니다.')
-      } else if (err?.code === 'auth/invalid-email') {
+      } else if (firebaseError?.code === 'auth/invalid-email') {
         setError('유효하지 않은 이메일 형식입니다.')
       } else {
         setError('문제가 발생했습니다. 다시 시도해주세요.')
@@ -57,7 +60,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
   const isLoading = isSigningIn || isSigningUp
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden">
       {/* Animated background shapes */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-20 left-10 w-32 h-32 bg-white bg-opacity-10 rounded-full animate-float" style={{animationDelay: '0s'}}></div>
@@ -66,7 +69,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
         <div className="absolute bottom-20 right-10 w-20 h-20 bg-white bg-opacity-10 rounded-full animate-float" style={{animationDelay: '1s'}}></div>
       </div>
       
-      <div className={`w-full max-w-sm glass-card p-8 animate-slide-up relative z-10 ${
+      <div className={`w-full max-w-sm mx-auto glass-card p-8 animate-slide-up relative z-10 ${
         mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5'
       }`}>
         {/* Modern Logo Section */}

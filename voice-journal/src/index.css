@@ -259,13 +259,13 @@
   /* Mobile responsive utilities */
   @media (max-width: 640px) {
     :root {
-      --spacing-xs: 2px;
-      --spacing-sm: 4px;
-      --spacing-md: 8px;
-      --spacing-lg: 16px;
-      --spacing-xl: 20px;
-      --spacing-2xl: 24px;
-      --spacing-3xl: 32px;
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --spacing-xl: 32px;
+      --spacing-2xl: 40px;
+      --spacing-3xl: 48px;
       
       --text-xs: 11px;
       --text-sm: 13px;

@@ -197,7 +197,7 @@ export const Dashboard: React.FC = () => {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-3xl mx-auto" style={{padding: 'var(--spacing-2xl) var(--spacing-lg)'}}>
+      <main className="max-w-3xl mx-auto px-4" style={{padding: 'var(--spacing-2xl) var(--spacing-lg)'}}>
         <div style={{display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4xl)'}}>
           {/* Modern Write Entry */}
           <div className="glass-card animate-slide-up" style={{padding: 'var(--spacing-4xl)'}}>

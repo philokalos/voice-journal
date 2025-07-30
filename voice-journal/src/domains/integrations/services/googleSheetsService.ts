@@ -218,7 +218,7 @@ export class GoogleSheetsService {
     try {
       const status = await this.getStatus()
       return status.connected
-    } catch (error) {
+    } catch {
       return false
     }
   }

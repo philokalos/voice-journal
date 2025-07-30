@@ -6,7 +6,7 @@ import { GoogleSheetsService } from '../../integrations/services/googleSheetsSer
 import { NotionService } from '../../integrations/services/notionService'
 import { SyncStatusManager } from '../../integrations/utils/syncStatusManager'
 import { OfflineStorageService, OfflineEntry } from './offlineStorageService'
-import { SyncService } from './syncService'
+// import { SyncService } from './syncService' // TODO: Re-enable when sync service is fully implemented
 
 export interface CreateEntryRequest {
   transcript: string

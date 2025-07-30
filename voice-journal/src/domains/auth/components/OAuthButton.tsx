@@ -8,21 +8,65 @@ interface OAuthButtonProps {
 
 export const OAuthButton: React.FC<OAuthButtonProps> = ({ onSuccess, onError }) => {
   const { signInWithGoogle, signInWithApple, isSigningIn } = useAuth()
+  
+  // Debug function for testing
+  const handleDebugTest = () => {
+    console.log('🧪 Debug Test Started');
+    console.log('🌍 Window location:', window.location.href);
+    console.log('🔧 Environment:', {
+      dev: import.meta.env.DEV,
+      prod: import.meta.env.PROD,
+      mode: import.meta.env.MODE
+    });
+    console.log('🔑 Environment vars check:', {
+      hasFirebaseApiKey: !!import.meta.env.VITE_FIREBASE_API_KEY,
+      hasFirebaseProjectId: !!import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      hasFirebaseAuthDomain: !!import.meta.env.VITE_FIREBASE_AUTH_DOMAIN
+    });
+  }
 
   const handleGoogleSignIn = async () => {
     try {
+      console.log('🚀 Starting Google sign in...')
       const result = await signInWithGoogle()
+      console.log('✅ Google sign in successful:', result)
       onSuccess?.()
-    } catch (err) {
-      onError?.('Google 로그인에 실패했습니다')
+    } catch (err: unknown) {
+      console.error('❌ Google sign in error:', err)
+      const firebaseError = err as { code?: string; message?: string }
+      console.error('Error code:', firebaseError?.code)
+      console.error('Error message:', firebaseError?.message)
+      
+      let errorMessage = 'Google 로그인에 실패했습니다'
+      
+      if (firebaseError?.code === 'auth/popup-closed-by-user') {
+        errorMessage = '로그인 창이 닫혔습니다. 다시 시도해주세요.'
+      } else if (firebaseError?.code === 'auth/popup-blocked') {
+        errorMessage = '팝업이 차단되었습니다. 브라우저 설정을 확인해주세요.'
+      } else if (firebaseError?.code === 'auth/cancelled-popup-request') {
+        errorMessage = '로그인이 취소되었습니다.'
+      } else if (firebaseError?.code === 'auth/network-request-failed') {
+        errorMessage = '네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.'
+      } else if (firebaseError?.code === 'auth/unauthorized-domain') {
+        errorMessage = '인증되지 않은 도메인입니다. Firebase Console에서 도메인을 승인해주세요.'
+      } else if (firebaseError?.code === 'auth/operation-not-allowed') {
+        errorMessage = 'Google 로그인이 비활성화되어 있습니다. Firebase Console에서 활성화해주세요.'
+      } else if (firebaseError?.code === 'auth/account-exists-with-different-credential') {
+        errorMessage = '다른 로그인 방법으로 이미 가입된 계정입니다.'
+      } else if (firebaseError?.message?.includes('iframe')) {
+        errorMessage = 'Google 로그인 초기화 중 오류가 발생했습니다. 페이지를 새로고침해주세요.'
+      }
+      
+      onError?.(errorMessage)
     }
   }
 
   const handleAppleSignIn = async () => {
     try {
-      const result = await signInWithApple()
+      await signInWithApple()
       onSuccess?.()
-    } catch (err) {
+    } catch (error) {
+      console.error('Apple sign in error:', error)
       onError?.('Apple 로그인에 실패했습니다')
     }
   }
@@ -128,6 +172,28 @@ export const OAuthButton: React.FC<OAuthButtonProps> = ({ onSuccess, onError }) 
             </>
           )}
         </button>
+        
+        {/* Debug button for development */}
+        {import.meta.env.DEV && (
+          <button
+            onClick={handleDebugTest}
+            className="w-full glass-card focus:outline-none transition-all duration-400 hover:transform hover:scale-105"
+            style={{
+              height: 'var(--button-height)', 
+              padding: 'var(--spacing-lg)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: 'var(--spacing-md)', 
+              fontSize: 'var(--text-sm)',
+              fontWeight: 'var(--font-weight-medium)',
+              color: 'var(--color-neutral-600)',
+              marginTop: 'var(--spacing-md)'
+            }}
+          >
+            🧪 Debug Test (Dev Only)
+          </button>
+        )}
       </div>
     </div>
   )

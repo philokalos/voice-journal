@@ -248,7 +248,7 @@ export class NotionService {
     try {
       const status = await this.getStatus()
       return status.connected
-    } catch (error) {
+    } catch {
       return false
     }
   }
